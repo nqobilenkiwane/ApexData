@@ -9,11 +9,18 @@ import java.util.List;
 
 public class Main {
 
-    // Keep your actual API key here
-    private static final String FRED_API_KEY = "eda0aae5142807f2f5fc1fe5b71873c7";
+    // Fetch the key securely from the environment
+    private static final String FRED_API_KEY = System.getenv("FRED_API_KEY");
 
     public static void main(String[] args) {
         System.out.println("Initializing Apex Data Engine...");
+
+        // Safety check to ensure the key is loaded
+        if (FRED_API_KEY == null || FRED_API_KEY.isBlank()) {
+            System.err.println("CRITICAL ERROR: FRED_API_KEY environment variable is missing.");
+            System.err.println("Please add it to your IntelliJ Run Configuration.");
+            System.exit(1);
+        }
 
         MarketDataClient client = new MarketDataClient();
         ObjectMapper mapper = new ObjectMapper();
