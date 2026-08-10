@@ -17,6 +17,7 @@ public class Main {
 
         MarketDataClient client = new MarketDataClient();
         ObjectMapper mapper = new ObjectMapper();
+        ScoringEngine engine = new ScoringEngine();
 
         // Endpoints
         String ratesEndpoint = String.format(
@@ -39,38 +40,42 @@ public class Main {
                     .max(Comparator.comparing(Observation::date))
                     .orElseThrow(() -> new RuntimeException("No rate data found"));
 
+            double currentInterestRate = latestRate.getRateAsDouble();
+
             // --- 2. Fetch & Parse CPI (Inflation) ---
             String cpiJson = client.fetchRawJson(cpiEndpoint);
             FredResponse cpiResponse = mapper.readValue(cpiJson, FredResponse.class);
 
-            // Sort CPI observations by date descending (newest first)
             List<Observation> sortedCpi = cpiResponse.observations().stream()
                     .sorted(Comparator.comparing(Observation::date).reversed())
                     .toList();
 
             Observation latestCpi = sortedCpi.get(0);
-            // Grab the CPI reading from exactly 12 months prior to calculate YoY inflation
             Observation yearAgoCpi = sortedCpi.get(12);
 
-            // Calculate YoY Inflation Percentage: ((Current - Previous) / Previous) * 100
             double currentCpiVal = latestCpi.getRateAsDouble();
             double yearAgoCpiVal = yearAgoCpi.getRateAsDouble();
             double yoyInflation = ((currentCpiVal - yearAgoCpiVal) / yearAgoCpiVal) * 100;
 
-            // --- 3. Output Dashboard ---
+            // --- 3. Run the Scoring Engine ---
+            String usdBias = engine.evaluateFundamentalBias(currentInterestRate, yoyInflation);
+            double realYield = engine.calculateRealYield(currentInterestRate, yoyInflation);
+
+            // --- 4. Output Dashboard ---
             System.out.println("========================================");
             System.out.println("          APEX DATA DASHBOARD           ");
             System.out.println("========================================");
 
             System.out.println("1. US Interest Rate (FEDFUNDS)");
-            System.out.println("   Date: " + latestRate.date());
-            System.out.println("   Rate: " + latestRate.getRateAsDouble() + "%\n");
+            System.out.printf("   Rate: %.2f%% (As of %s)\n\n", currentInterestRate, latestRate.date());
 
             System.out.println("2. US YoY Inflation (CPI)");
-            System.out.println("   Date: " + latestCpi.date());
-            System.out.printf("   Rate: %.2f%%\n", yoyInflation);
-            System.out.println("   (Raw Index: " + currentCpiVal + ")");
+            System.out.printf("   Rate: %.2f%% (As of %s)\n\n", yoyInflation, latestCpi.date());
 
+            System.out.println("----------------------------------------");
+            System.out.println(">> FUNDAMENTAL SCORING <<");
+            System.out.printf("Real Yield: %.2f%%\n", realYield);
+            System.out.println("USD Bias:   " + usdBias);
             System.out.println("========================================");
 
         } catch (Exception e) {
