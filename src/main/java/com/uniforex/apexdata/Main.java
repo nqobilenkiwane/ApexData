@@ -17,26 +17,26 @@ public class Main {
             System.exit(1);
         }
 
-        // Shared dependencies
         MarketDataClient client = new MarketDataClient();
         ObjectMapper mapper = new ObjectMapper();
         CompositeScoringEngine engine = new CompositeScoringEngine();
 
-        // Instantiate domain services
         FredService fredService = new FredService(client, mapper, FRED_API_KEY);
         CftcService cftcService = new CftcService(client, mapper);
 
         try {
             System.out.println("Fetching Macroeconomic & Institutional Data...\n");
 
-            // Execute service calls
             FredService.FredMacroData macroData = fredService.fetchMacroData();
             CotObservation cotData = cftcService.fetchLatestUsdCot();
 
             // Run Tally Scoring Logic
             int macroScore = engine.scoreMacroFundamentals(macroData.interestRate(), macroData.yoyInflation());
+            int laborScore = engine.scoreLaborMarket(macroData.unemploymentRate());
             int institutionalScore = engine.scoreInstitutionalPositioning(cotData.getNetPosition());
-            int totalScore = macroScore + institutionalScore;
+
+            // New Unweighted Tally
+            int totalScore = macroScore + laborScore + institutionalScore;
             String overallBias = engine.getOverallBiasLabel(totalScore);
 
             // Output Dashboard
@@ -48,13 +48,16 @@ public class Main {
             System.out.printf("  Interest Rate: %.2f%%\n", macroData.interestRate());
             System.out.printf("  YoY Inflation: %.2f%%\n", macroData.yoyInflation());
             System.out.printf("  Real Yield:    %.2f%%\n", (macroData.interestRate() - macroData.yoyInflation()));
-            System.out.printf("  [SCORE: %+d]\n", macroScore);
+            System.out.printf("  [RATES SCORE: %+d]\n", macroScore);
+            System.out.println("  ----------------");
+            System.out.printf("  Unemployment:  %.1f%%\n", macroData.unemploymentRate());
+            System.out.printf("  [LABOR SCORE: %+d]\n", laborScore);
 
             System.out.println("\nPILLAR 2: INSTITUTIONAL POSITIONING");
             System.out.printf("  Longs (Buys):  %,.0f contracts\n", cotData.getLongPositions());
             System.out.printf("  Shorts (Sells):%,.0f contracts\n", cotData.getShortPositions());
             System.out.printf("  Net Position:  %,.0f contracts\n", cotData.getNetPosition());
-            System.out.printf("  [SCORE: %+d]\n", institutionalScore);
+            System.out.printf("  [INST. SCORE: %+d]\n", institutionalScore);
 
             System.out.println("----------------------------------------");
             System.out.println(">> OVERALL USD COMPOSITE TALLY <<");

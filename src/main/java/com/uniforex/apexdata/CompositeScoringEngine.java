@@ -44,4 +44,18 @@ public class CompositeScoringEngine {
         if (totalScore <= -2) return "STRONGLY BEARISH";
         return "UNKNOWN";
     }
+
+    /**
+     * Scores the Labor Market based on the Unemployment Rate.
+     * Returns: +1 (Bullish), -1 (Bearish), 0 (Neutral)
+     */
+    public int scoreLaborMarket(double unemploymentRate) {
+        if (unemploymentRate < 4.0) {
+            return 1;   // Extremely tight labor market, fed can hike rates
+        } else if (unemploymentRate > 4.5) {
+            return -1;  // Labor market cooling, rate cuts likely
+        } else {
+            return 0;   // Normal/Neutral bounds
+        }
+    }
 }

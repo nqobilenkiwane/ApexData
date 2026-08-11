@@ -20,12 +20,14 @@ public class FredService {
         this.apiKey = apiKey;
     }
 
-    // Immutable DTO holding macro data for downstream consumers
+    // Expanded DTO holding the new labor market data
     public record FredMacroData(
             double interestRate,
             String interestRateDate,
             double yoyInflation,
-            String cpiDate
+            String cpiDate,
+            double unemploymentRate,
+            String unemploymentDate
     ) {}
 
     public FredMacroData fetchMacroData() throws Exception {
@@ -35,6 +37,10 @@ public class FredService {
         );
         String cpiEndpoint = String.format(
                 "https://api.stlouisfed.org/fred/series/observations?series_id=CPIAUCSL&api_key=%s&file_type=json",
+                apiKey
+        );
+        String unrateEndpoint = String.format(
+                "https://api.stlouisfed.org/fred/series/observations?series_id=UNRATE&api_key=%s&file_type=json",
                 apiKey
         );
 
@@ -59,11 +65,20 @@ public class FredService {
         double yearAgoCpiVal = yearAgoCpi.getRateAsDouble();
         double yoyInflation = ((currentCpiVal - yearAgoCpiVal) / yearAgoCpiVal) * 100;
 
+        // Fetch & Parse Unemployment Rate
+        String unrateJson = client.fetchRawJson(unrateEndpoint);
+        FredResponse unrateResponse = mapper.readValue(unrateJson, FredResponse.class);
+        Observation latestUnrate = unrateResponse.observations().stream()
+                .max(Comparator.comparing(Observation::date))
+                .orElseThrow(() -> new RuntimeException("No unemployment data found"));
+
         return new FredMacroData(
                 latestRate.getRateAsDouble(),
                 latestRate.date(),
                 yoyInflation,
-                latestCpi.date()
+                latestCpi.date(),
+                latestUnrate.getRateAsDouble(),
+                latestUnrate.date()
         );
     }
 }

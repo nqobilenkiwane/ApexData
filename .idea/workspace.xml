@@ -5,9 +5,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="472978b4-dc81-4f9c-8a43-48c717957710" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/src/main/java/com/uniforex/apexdata/CompositeScoringEngine.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/uniforex/apexdata/CompositeScoringEngine.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/uniforex/apexdata/CompositeScoringEngine.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/uniforex/apexdata/Main.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/uniforex/apexdata/Main.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/uniforex/apexdata/service/FredService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/uniforex/apexdata/service/FredService.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
