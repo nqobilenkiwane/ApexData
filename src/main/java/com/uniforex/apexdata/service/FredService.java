@@ -20,14 +20,16 @@ public class FredService {
         this.apiKey = apiKey;
     }
 
-    // Expanded DTO holding the new labor market data
+    // Expanded DTO holding the new GDP data
     public record FredMacroData(
             double interestRate,
             String interestRateDate,
             double yoyInflation,
             String cpiDate,
             double unemploymentRate,
-            String unemploymentDate
+            String unemploymentDate,
+            double gdp,
+            String gdpDate
     ) {}
 
     public FredMacroData fetchMacroData() throws Exception {
@@ -41,6 +43,10 @@ public class FredService {
         );
         String unrateEndpoint = String.format(
                 "https://api.stlouisfed.org/fred/series/observations?series_id=UNRATE&api_key=%s&file_type=json",
+                apiKey
+        );
+        String gdpEndpoint = String.format(
+                "https://api.stlouisfed.org/fred/series/observations?series_id=A191RL1Q225SBEA&api_key=%s&file_type=json",
                 apiKey
         );
 
@@ -72,13 +78,22 @@ public class FredService {
                 .max(Comparator.comparing(Observation::date))
                 .orElseThrow(() -> new RuntimeException("No unemployment data found"));
 
+        // Fetch & Parse Real GDP
+        String gdpJson = client.fetchRawJson(gdpEndpoint);
+        FredResponse gdpResponse = mapper.readValue(gdpJson, FredResponse.class);
+        Observation latestGdp = gdpResponse.observations().stream()
+                .max(Comparator.comparing(Observation::date))
+                .orElseThrow(() -> new RuntimeException("No GDP data found"));
+
         return new FredMacroData(
                 latestRate.getRateAsDouble(),
                 latestRate.date(),
                 yoyInflation,
                 latestCpi.date(),
                 latestUnrate.getRateAsDouble(),
-                latestUnrate.date()
+                latestUnrate.date(),
+                latestGdp.getRateAsDouble(),
+                latestGdp.date()
         );
     }
 }

@@ -58,4 +58,18 @@ public class CompositeScoringEngine {
             return 0;   // Normal/Neutral bounds
         }
     }
+
+    /**
+     * Scores Economic Growth based on Real GDP (Annualized).
+     * Returns: +1 (Bullish), -1 (Bearish), 0 (Neutral)
+     */
+    public int scoreGdp(double gdp) {
+        if (gdp > 2.5) {
+            return 1;   // Strong growth, supportive of higher rates
+        } else if (gdp < 1.0) {
+            return -1;  // Weak growth / contraction, dovish for USD
+        } else {
+            return 0;   // Moderate, stable growth
+        }
+    }
 }

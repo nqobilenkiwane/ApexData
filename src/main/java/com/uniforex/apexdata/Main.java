@@ -33,10 +33,11 @@ public class Main {
             // Run Tally Scoring Logic
             int macroScore = engine.scoreMacroFundamentals(macroData.interestRate(), macroData.yoyInflation());
             int laborScore = engine.scoreLaborMarket(macroData.unemploymentRate());
+            int gdpScore = engine.scoreGdp(macroData.gdp());
             int institutionalScore = engine.scoreInstitutionalPositioning(cotData.getNetPosition());
 
-            // New Unweighted Tally
-            int totalScore = macroScore + laborScore + institutionalScore;
+            // Unweighted Tally
+            int totalScore = macroScore + laborScore + gdpScore + institutionalScore;
             String overallBias = engine.getOverallBiasLabel(totalScore);
 
             // Output Dashboard
@@ -52,6 +53,9 @@ public class Main {
             System.out.println("  ----------------");
             System.out.printf("  Unemployment:  %.1f%%\n", macroData.unemploymentRate());
             System.out.printf("  [LABOR SCORE: %+d]\n", laborScore);
+            System.out.println("  ----------------");
+            System.out.printf("  Real GDP:      %.1f%%\n", macroData.gdp());
+            System.out.printf("  [GDP SCORE:   %+d]\n", gdpScore);
 
             System.out.println("\nPILLAR 2: INSTITUTIONAL POSITIONING");
             System.out.printf("  Longs (Buys):  %,.0f contracts\n", cotData.getLongPositions());
