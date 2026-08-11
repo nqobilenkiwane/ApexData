@@ -4,7 +4,14 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="472978b4-dc81-4f9c-8a43-48c717957710" name="Changes" comment="" />
+    <list default="true" id="472978b4-dc81-4f9c-8a43-48c717957710" name="Changes" comment="Add initial project description to README&#10;&#10;Added project description and core tech stack details.">
+      <change afterPath="$PROJECT_DIR$/src/main/java/com/uniforex/apexdata/ScoringEngine.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/com/uniforex/apexdata/model/CotObservation.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/com/uniforex/apexdata/service/CftcService.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/com/uniforex/apexdata/service/FredService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/uniforex/apexdata/Main.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/uniforex/apexdata/Main.java" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -18,6 +25,11 @@
     </option>
   </component>
   <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="master" />
+      </map>
+    </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
   <component name="ProjectColorInfo">{
@@ -31,20 +43,23 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;Application.Main.executor&quot;: &quot;Run&quot;,
-    &quot;Maven.ApexData [clean].executor&quot;: &quot;Run&quot;,
-    &quot;Maven.ApexData [compile].executor&quot;: &quot;Run&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
-    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.lookFeel&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Application.Main.executor": "Run",
+    "Maven.ApexData [clean].executor": "Run",
+    "Maven.ApexData [compile].executor": "Run",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "git-widget-placeholder": "Merging master",
+    "kotlin-language-version-configured": "true",
+    "settings.editor.selected.configurable": "preferences.lookFeel"
   }
-}</component>
+}]]></component>
   <component name="RunManager">
     <configuration name="Main" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
+      <envs>
+        <env name="FRED_API_KEY" value="eda0aae5142807f2f5fc1fe5b71873c7" />
+      </envs>
       <option name="MAIN_CLASS_NAME" value="com.uniforex.apexdata.Main" />
       <module name="ApexData" />
       <extension name="coverage">
@@ -99,5 +114,9 @@
         </entry>
       </map>
     </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Add initial project description to README&#10;&#10;Added project description and core tech stack details." />
+    <option name="LAST_COMMIT_MESSAGE" value="Add initial project description to README&#10;&#10;Added project description and core tech stack details." />
   </component>
 </project>
