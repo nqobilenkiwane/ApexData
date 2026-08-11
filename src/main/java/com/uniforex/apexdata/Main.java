@@ -20,7 +20,7 @@ public class Main {
         // Shared dependencies
         MarketDataClient client = new MarketDataClient();
         ObjectMapper mapper = new ObjectMapper();
-        ScoringEngine engine = new ScoringEngine();
+        CompositeScoringEngine engine = new CompositeScoringEngine();
 
         // Instantiate domain services
         FredService fredService = new FredService(client, mapper, FRED_API_KEY);
@@ -33,9 +33,11 @@ public class Main {
             FredService.FredMacroData macroData = fredService.fetchMacroData();
             CotObservation cotData = cftcService.fetchLatestUsdCot();
 
-            // Run Scoring Logic
-            String usdBias = engine.evaluateFundamentalBias(macroData.interestRate(), macroData.yoyInflation());
-            double realYield = engine.calculateRealYield(macroData.interestRate(), macroData.yoyInflation());
+            // Run Tally Scoring Logic
+            int macroScore = engine.scoreMacroFundamentals(macroData.interestRate(), macroData.yoyInflation());
+            int institutionalScore = engine.scoreInstitutionalPositioning(cotData.getNetPosition());
+            int totalScore = macroScore + institutionalScore;
+            String overallBias = engine.getOverallBiasLabel(totalScore);
 
             // Output Dashboard
             System.out.println("========================================");
@@ -43,22 +45,21 @@ public class Main {
             System.out.println("========================================");
 
             System.out.println("PILLAR 1: MACRO FUNDAMENTALS");
-            System.out.printf("  Interest Rate: %.2f%% (As of %s)\n", macroData.interestRate(), macroData.interestRateDate());
-            System.out.printf("  YoY Inflation: %.2f%% (As of %s)\n", macroData.yoyInflation(), macroData.cpiDate());
-            System.out.printf("  Real Yield:    %.2f%%\n", realYield);
+            System.out.printf("  Interest Rate: %.2f%%\n", macroData.interestRate());
+            System.out.printf("  YoY Inflation: %.2f%%\n", macroData.yoyInflation());
+            System.out.printf("  Real Yield:    %.2f%%\n", (macroData.interestRate() - macroData.yoyInflation()));
+            System.out.printf("  [SCORE: %+d]\n", macroScore);
 
-            System.out.println("\nPILLAR 2: INSTITUTIONAL POSITIONING (HEDGE FUNDS)");
-            System.out.printf("  Report Date:   %s\n", cotData.report_date_as_yyyy_mm_dd());
+            System.out.println("\nPILLAR 2: INSTITUTIONAL POSITIONING");
             System.out.printf("  Longs (Buys):  %,.0f contracts\n", cotData.getLongPositions());
             System.out.printf("  Shorts (Sells):%,.0f contracts\n", cotData.getShortPositions());
             System.out.printf("  Net Position:  %,.0f contracts\n", cotData.getNetPosition());
+            System.out.printf("  [SCORE: %+d]\n", institutionalScore);
 
             System.out.println("----------------------------------------");
-            System.out.println(">> OVERALL USD MACRO BIAS <<");
-            System.out.println("   " + usdBias);
-
-            String institutionalFlow = cotData.getNetPosition() > 0 ? "BULLISH (Net Long)" : "BEARISH (Net Short)";
-            System.out.println("   Institutional Flow: " + institutionalFlow);
+            System.out.println(">> OVERALL USD COMPOSITE TALLY <<");
+            System.out.printf("   TOTAL SCORE:  %+d\n", totalScore);
+            System.out.println("   MARKET BIAS:  " + overallBias);
             System.out.println("========================================");
 
         } catch (Exception e) {
