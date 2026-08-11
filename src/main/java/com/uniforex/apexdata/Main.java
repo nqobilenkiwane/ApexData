@@ -35,10 +35,11 @@ public class Main {
             int laborScore = engine.scoreLaborMarket(macroData.unemploymentRate());
             int gdpScore = engine.scoreGdp(macroData.gdp());
             int retailScore = engine.scoreRetailSales(macroData.momRetailSales());
+            int nfpScore = engine.scoreNfp(macroData.nfpChange());
             int institutionalScore = engine.scoreInstitutionalPositioning(cotData.getNetPosition());
 
             // Unweighted Tally
-            int totalScore = macroScore + laborScore + gdpScore + retailScore + institutionalScore;
+            int totalScore = macroScore + laborScore + gdpScore + retailScore + nfpScore + institutionalScore;
             String overallBias = engine.getOverallBiasLabel(totalScore);
 
             // Output Dashboard
@@ -54,6 +55,9 @@ public class Main {
             System.out.println("  ----------------");
             System.out.printf("  Unemployment:  %.1f%%\n", macroData.unemploymentRate());
             System.out.printf("  [LABOR SCORE: %+d]\n", laborScore);
+            System.out.println("  ----------------");
+            System.out.printf("  NFP (Jobs):    %+.0fK\n", macroData.nfpChange());
+            System.out.printf("  [NFP SCORE:   %+d]\n", nfpScore);
             System.out.println("  ----------------");
             System.out.printf("  Real GDP:      %.1f%%\n", macroData.gdp());
             System.out.printf("  [GDP SCORE:   %+d]\n", gdpScore);

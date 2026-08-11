@@ -60,6 +60,20 @@ public class CompositeScoringEngine {
     }
 
     /**
+     * Scores Labor Market Momentum based on Non-Farm Payrolls (NFP) job additions (in thousands).
+     * Returns: +1 (Bullish), -1 (Bearish), 0 (Neutral)
+     */
+    public int scoreNfp(double nfpChange) {
+        if (nfpChange > 150.0) {
+            return 1;   // Strong job creation, supports hawkish policy
+        } else if (nfpChange < 100.0) {
+            return -1;  // Weak job creation, signals economic slowing
+        } else {
+            return 0;   // Neutral job growth
+        }
+    }
+
+    /**
      * Scores Economic Growth based on Real GDP (Annualized).
      * Returns: +1 (Bullish), -1 (Bearish), 0 (Neutral)
      */

@@ -20,7 +20,7 @@ public class FredService {
         this.apiKey = apiKey;
     }
 
-    // Expanded DTO holding the new Retail Sales data
+    // Expanded DTO holding the new NFP data
     public record FredMacroData(
             double interestRate,
             String interestRateDate,
@@ -31,7 +31,9 @@ public class FredService {
             double gdp,
             String gdpDate,
             double momRetailSales,
-            String retailSalesDate
+            String retailSalesDate,
+            double nfpChange,
+            String nfpDate
     ) {}
 
     public FredMacroData fetchMacroData() throws Exception {
@@ -53,6 +55,10 @@ public class FredService {
         );
         String retailEndpoint = String.format(
                 "https://api.stlouisfed.org/fred/series/observations?series_id=RSAFS&api_key=%s&file_type=json",
+                apiKey
+        );
+        String nfpEndpoint = String.format(
+                "https://api.stlouisfed.org/fred/series/observations?series_id=PAYEMS&api_key=%s&file_type=json",
                 apiKey
         );
 
@@ -87,7 +93,7 @@ public class FredService {
                 .max(Comparator.comparing(Observation::date))
                 .orElseThrow(() -> new RuntimeException("No GDP data found"));
 
-        // Fetch & Parse Retail Sales (Calculate MoM %)
+        // Fetch & Parse Retail Sales
         String retailJson = client.fetchRawJson(retailEndpoint);
         FredResponse retailResponse = mapper.readValue(retailJson, FredResponse.class);
         List<Observation> sortedRetail = retailResponse.observations().stream()
@@ -96,6 +102,16 @@ public class FredService {
         Observation latestRetail = sortedRetail.get(0);
         Observation prevRetail = sortedRetail.get(1);
         double momRetailSales = ((latestRetail.getRateAsDouble() - prevRetail.getRateAsDouble()) / prevRetail.getRateAsDouble()) * 100;
+
+        // Fetch & Parse NFP (Calculate month-over-month absolute change)
+        String nfpJson = client.fetchRawJson(nfpEndpoint);
+        FredResponse nfpResponse = mapper.readValue(nfpJson, FredResponse.class);
+        List<Observation> sortedNfp = nfpResponse.observations().stream()
+                .sorted(Comparator.comparing(Observation::date).reversed())
+                .toList();
+        Observation latestNfp = sortedNfp.get(0);
+        Observation prevNfp = sortedNfp.get(1);
+        double nfpChange = latestNfp.getRateAsDouble() - prevNfp.getRateAsDouble();
 
         return new FredMacroData(
                 latestRate.getRateAsDouble(),
@@ -107,7 +123,9 @@ public class FredService {
                 latestGdp.getRateAsDouble(),
                 latestGdp.date(),
                 momRetailSales,
-                latestRetail.date()
+                latestRetail.date(),
+                nfpChange,
+                latestNfp.date()
         );
     }
 }
