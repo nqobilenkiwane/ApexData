@@ -72,4 +72,18 @@ public class CompositeScoringEngine {
             return 0;   // Moderate, stable growth
         }
     }
+
+    /**
+     * Scores Consumer Strength based on Retail Sales Month-over-Month (MoM) Growth.
+     * Returns: +1 (Bullish), -1 (Bearish), 0 (Neutral)
+     */
+    public int scoreRetailSales(double momRetailSales) {
+        if (momRetailSales > 0.1) {
+            return 1;   // Consumers are spending, economy is expanding
+        } else if (momRetailSales < -0.1) {
+            return -1;  // Consumers are pulling back, tightening conditions
+        } else {
+            return 0;   // Flat or neutral growth
+        }
+    }
 }
