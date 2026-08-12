@@ -100,4 +100,21 @@ public class CompositeScoringEngine {
             return 0;   // Flat or neutral growth
         }
     }
+
+    /**
+     * Scores Technical Analysis based on the 200 SMA (Trend) and 14 RSI (Momentum).
+     * Returns: +1 (Bullish), -1 (Bearish), 0 (Neutral)
+     */
+    public int scoreTechnicals(double currentPrice, double sma200, double rsi14) {
+        boolean isUptrend = currentPrice > sma200;
+        boolean isBullishMomentum = rsi14 > 50.0;
+
+        if (isUptrend && isBullishMomentum) {
+            return 1;   // Confirmed bullish trend and momentum
+        } else if (!isUptrend && !isBullishMomentum) {
+            return -1;  // Confirmed bearish trend and momentum
+        } else {
+            return 0;   // Divergence (e.g. Uptrend but losing momentum)
+        }
+    }
 }
