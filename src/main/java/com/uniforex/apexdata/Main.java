@@ -2,10 +2,16 @@ package com.uniforex.apexdata;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.uniforex.apexdata.model.CotObservation;
+import com.uniforex.apexdata.model.MarketMetric;
+import com.uniforex.apexdata.model.MetricCategory;
 import com.uniforex.apexdata.service.CftcService;
 import com.uniforex.apexdata.service.FredService;
 import com.uniforex.apexdata.service.TechnicalService;
-import io.github.cdimascio.dotenv.Dotenv; // ADD THIS IMPORT
+import io.github.cdimascio.dotenv.Dotenv;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 public class Main {
 
@@ -37,68 +43,66 @@ public class Main {
         CftcService cftcService = new CftcService(client, mapper);
         TechnicalService technicalService = new TechnicalService(client, mapper, alphaVantageApiKey);
 
-        // ... [The rest of your try-catch block and printing logic remains exactly the same] ...
-
         try {
             System.out.println("Fetching Macroeconomic, Institutional & Technical Data...\n");
 
-            FredService.FredMacroData macroData = fredService.fetchMacroData();
+            // --- 1. FETCH RAW DATA ---
+            List<MarketMetric> rawFredMetrics = fredService.fetchMacroData();
             CotObservation cotData = cftcService.fetchLatestUsdCot();
             TechnicalService.TechnicalData techData = technicalService.fetchUsdTechnicals();
 
-            // Run Tally Scoring Logic
-            int macroScore = engine.scoreMacroFundamentals(macroData.interestRate(), macroData.yoyInflation());
-            int laborScore = engine.scoreLaborMarket(macroData.unemploymentRate());
-            int gdpScore = engine.scoreGdp(macroData.gdp());
-            int retailScore = engine.scoreRetailSales(macroData.momRetailSales());
-            int nfpScore = engine.scoreNfp(macroData.nfpChange());
+            // --- 2. APPLY SCORING LOGIC ---
+            // Score the FRED macroeconomic metrics dynamically
+            List<MarketMetric> scoredMetrics = new ArrayList<>(engine.applyScores(rawFredMetrics));
+
+            // Manually score Institutional and Technical data, then wrap them in our universal MarketMetric container
             int institutionalScore = engine.scoreInstitutionalPositioning(cotData.getNetPosition());
             int technicalScore = engine.scoreTechnicals(techData.currentPrice(), techData.sma200(), techData.rsi14());
 
-            // Unweighted Tally Across All 3 Pillars
-            int totalScore = macroScore + laborScore + gdpScore + retailScore + nfpScore + institutionalScore + technicalScore;
+            scoredMetrics.add(new MarketMetric(
+                    "COT Net Positioning", cotData.getNetPosition(), 0.0, institutionalScore, MetricCategory.INSTITUTIONAL_ACTIVITY));
+            scoredMetrics.add(new MarketMetric(
+                    "Technical Momentum", techData.currentPrice(), 0.0, technicalScore, MetricCategory.TECHNICALS));
+
+            // --- 3. AGGREGATE TOTALS ---
+            Map<MetricCategory, Integer> categoryScores = engine.calculateCategoryScores(scoredMetrics);
+            int totalScore = engine.calculateTotalScore(scoredMetrics);
             String overallBias = engine.getOverallBiasLabel(totalScore);
 
-            // Output Dashboard
-            System.out.println("========================================");
-            System.out.println("          APEX DATA DASHBOARD           ");
-            System.out.println("========================================");
+            // --- 4. DYNAMIC DASHBOARD OUTPUT ---
+            System.out.println("==============================================================");
+            System.out.println("                     APEX DATA DASHBOARD                      ");
+            System.out.println("==============================================================");
 
-            System.out.println("PILLAR 1: MACRO FUNDAMENTALS");
-            System.out.printf("  Interest Rate: %.2f%%\n", macroData.interestRate());
-            System.out.printf("  YoY Inflation: %.2f%%\n", macroData.yoyInflation());
-            System.out.printf("  Real Yield:    %.2f%%\n", (macroData.interestRate() - macroData.yoyInflation()));
-            System.out.printf("  [RATES SCORE: %+d]\n", macroScore);
-            System.out.println("  ----------------");
-            System.out.printf("  Unemployment:  %.1f%%\n", macroData.unemploymentRate());
-            System.out.printf("  [LABOR SCORE: %+d]\n", laborScore);
-            System.out.println("  ----------------");
-            System.out.printf("  NFP (Jobs):    %+.0fK\n", macroData.nfpChange());
-            System.out.printf("  [NFP SCORE:   %+d]\n", nfpScore);
-            System.out.println("  ----------------");
-            System.out.printf("  Real GDP:      %.1f%%\n", macroData.gdp());
-            System.out.printf("  [GDP SCORE:   %+d]\n", gdpScore);
-            System.out.println("  ----------------");
-            System.out.printf("  Retail Sales:  %.2f%% (MoM)\n", macroData.momRetailSales());
-            System.out.printf("  [RETAIL SCORE:%+d]\n", retailScore);
+            // Loop through our strict enum categories and print their contents automatically
+            for (MetricCategory category : MetricCategory.values()) {
+                System.out.printf("\n>> %s [CATEGORY SCORE: %+d]\n", category.name().replace("_", " "), categoryScores.getOrDefault(category, 0));
+                System.out.println("--------------------------------------------------------------");
 
-            System.out.println("\nPILLAR 2: INSTITUTIONAL POSITIONING");
-            System.out.printf("  Longs (Buys):  %,.0f contracts\n", cotData.getLongPositions());
-            System.out.printf("  Shorts (Sells):%,.0f contracts\n", cotData.getShortPositions());
-            System.out.printf("  Net Position:  %,.0f contracts\n", cotData.getNetPosition());
-            System.out.printf("  [INST. SCORE: %+d]\n", institutionalScore);
+                scoredMetrics.stream()
+                        .filter(m -> m.category() == category)
+                        .forEach(m -> {
+                            // A quick format switch to keep the UI looking clean based on the metric type
+                            String valueStr;
+                            if (m.name().contains("COT")) {
+                                valueStr = String.format("%,.0f contracts", m.actualValue());
+                            } else if (m.name().contains("Momentum")) {
+                                valueStr = String.format("%,.4f (Price)", m.actualValue());
+                            } else if (m.name().contains("NFP")) {
+                                valueStr = String.format("%+.0fK", m.actualValue());
+                            } else {
+                                valueStr = String.format("%,.2f%%", m.actualValue());
+                            }
 
-            System.out.println("\nPILLAR 3: TECHNICAL ANALYSIS (TA4J)");
-            System.out.printf("  USD/EUR Price: %.4f\n", techData.currentPrice());
-            System.out.printf("  USD/EUR 200 SMA:%.4f\n", techData.sma200());
-            System.out.printf("  14-Day RSI:    %.1f\n", techData.rsi14());
-            System.out.printf("  [TECH SCORE:  %+d]\n", technicalScore);
+                            System.out.printf("  %-25s | Actual: %-20s | Score: %+d\n", m.name(), valueStr, m.scoreDelta());
+                        });
+            }
 
-            System.out.println("----------------------------------------");
+            System.out.println("\n==============================================================");
             System.out.println(">> OVERALL USD COMPOSITE TALLY <<");
             System.out.printf("   TOTAL SCORE:  %+d\n", totalScore);
             System.out.println("   MARKET BIAS:  " + overallBias);
-            System.out.println("========================================");
+            System.out.println("==============================================================");
 
         } catch (Exception e) {
             System.err.println("Failed to fetch or parse market data: " + e.getMessage());

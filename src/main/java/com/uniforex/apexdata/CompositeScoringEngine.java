@@ -1,11 +1,87 @@
 package com.uniforex.apexdata;
 
+import com.uniforex.apexdata.model.MarketMetric;
+import com.uniforex.apexdata.model.MetricCategory;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 public class CompositeScoringEngine {
 
     /**
-     * Scores the Macro Fundamentals based on Real Yield.
-     * Returns: +1 (Bullish), -1 (Bearish), 0 (Neutral)
+     * Iterates through raw metrics, applies the existing mathematical logic,
+     * and returns a new list of fully scored metrics.
      */
+    public List<MarketMetric> applyScores(List<MarketMetric> rawMetrics) {
+        // 1. Extract values needed for composite scores (like Real Yield)
+        double interestRate = rawMetrics.stream()
+                .filter(m -> m.name().equals("Interest Rate"))
+                .mapToDouble(MarketMetric::actualValue).findFirst().orElse(0.0);
+        double inflation = rawMetrics.stream()
+                .filter(m -> m.name().equals("YoY Inflation"))
+                .mapToDouble(MarketMetric::actualValue).findFirst().orElse(0.0);
+
+        int realYieldScore = scoreMacroFundamentals(interestRate, inflation);
+
+        // 2. Loop through and score each metric
+        List<MarketMetric> scoredMetrics = new ArrayList<>();
+
+        for (MarketMetric m : rawMetrics) {
+            int score = 0;
+            switch (m.name()) {
+                case "Unemployment Rate":
+                    score = scoreLaborMarket(m.actualValue());
+                    break;
+                case "NFP (Jobs)":
+                    score = scoreNfp(m.actualValue());
+                    break;
+                case "Real GDP":
+                    score = scoreGdp(m.actualValue());
+                    break;
+                case "Retail Sales (MoM)":
+                    score = scoreRetailSales(m.actualValue());
+                    break;
+                case "Interest Rate":
+                    // Attach the combined Real Yield score here
+                    score = realYieldScore;
+                    break;
+                case "YoY Inflation":
+                    // Set to 0 to avoid double-counting the Real Yield score
+                    score = 0;
+                    break;
+                default:
+                    score = 0;
+            }
+            // Create a fresh, immutable record with the calculated score
+            scoredMetrics.add(new MarketMetric(m.name(), m.actualValue(), m.forecastValue(), score, m.category()));
+        }
+        return scoredMetrics;
+    }
+
+    /**
+     * Groups the metrics by Category and sums their scores dynamically.
+     */
+    public Map<MetricCategory, Integer> calculateCategoryScores(List<MarketMetric> scoredMetrics) {
+        return scoredMetrics.stream()
+                .collect(Collectors.groupingBy(
+                        MarketMetric::category,
+                        Collectors.summingInt(MarketMetric::scoreDelta)
+                ));
+    }
+
+    /**
+     * Calculates the absolute total score across all data points.
+     */
+    public int calculateTotalScore(List<MarketMetric> scoredMetrics) {
+        return scoredMetrics.stream().mapToInt(MarketMetric::scoreDelta).sum();
+    }
+
+    // ========================================================================
+    // EXISTING SCORING LOGIC (Untouched)
+    // ========================================================================
+
     public int scoreMacroFundamentals(double interestRate, double inflationRate) {
         double realYield = interestRate - inflationRate;
         double threshold = 0.5;
@@ -19,10 +95,6 @@ public class CompositeScoringEngine {
         }
     }
 
-    /**
-     * Scores the Institutional Order Flow based on Net Hedge Fund Positions.
-     * Returns: +1 (Bullish), -1 (Bearish), 0 (Neutral)
-     */
     public int scoreInstitutionalPositioning(double netPositions) {
         if (netPositions > 0) {
             return 1;
@@ -33,9 +105,6 @@ public class CompositeScoringEngine {
         }
     }
 
-    /**
-     * Translates the final integer tally into a clear, readable market bias.
-     */
     public String getOverallBiasLabel(int totalScore) {
         if (totalScore >= 2) return "STRONGLY BULLISH";
         if (totalScore == 1) return "BULLISH";
@@ -45,76 +114,56 @@ public class CompositeScoringEngine {
         return "UNKNOWN";
     }
 
-    /**
-     * Scores the Labor Market based on the Unemployment Rate.
-     * Returns: +1 (Bullish), -1 (Bearish), 0 (Neutral)
-     */
     public int scoreLaborMarket(double unemploymentRate) {
         if (unemploymentRate < 4.0) {
-            return 1;   // Extremely tight labor market, fed can hike rates
+            return 1;
         } else if (unemploymentRate > 4.5) {
-            return -1;  // Labor market cooling, rate cuts likely
+            return -1;
         } else {
-            return 0;   // Normal/Neutral bounds
+            return 0;
         }
     }
 
-    /**
-     * Scores Labor Market Momentum based on Non-Farm Payrolls (NFP) job additions (in thousands).
-     * Returns: +1 (Bullish), -1 (Bearish), 0 (Neutral)
-     */
     public int scoreNfp(double nfpChange) {
         if (nfpChange > 150.0) {
-            return 1;   // Strong job creation, supports hawkish policy
+            return 1;
         } else if (nfpChange < 100.0) {
-            return -1;  // Weak job creation, signals economic slowing
+            return -1;
         } else {
-            return 0;   // Neutral job growth
+            return 0;
         }
     }
 
-    /**
-     * Scores Economic Growth based on Real GDP (Annualized).
-     * Returns: +1 (Bullish), -1 (Bearish), 0 (Neutral)
-     */
     public int scoreGdp(double gdp) {
         if (gdp > 2.5) {
-            return 1;   // Strong growth, supportive of higher rates
+            return 1;
         } else if (gdp < 1.0) {
-            return -1;  // Weak growth / contraction, dovish for USD
+            return -1;
         } else {
-            return 0;   // Moderate, stable growth
+            return 0;
         }
     }
 
-    /**
-     * Scores Consumer Strength based on Retail Sales Month-over-Month (MoM) Growth.
-     * Returns: +1 (Bullish), -1 (Bearish), 0 (Neutral)
-     */
     public int scoreRetailSales(double momRetailSales) {
         if (momRetailSales > 0.1) {
-            return 1;   // Consumers are spending, economy is expanding
+            return 1;
         } else if (momRetailSales < -0.1) {
-            return -1;  // Consumers are pulling back, tightening conditions
+            return -1;
         } else {
-            return 0;   // Flat or neutral growth
+            return 0;
         }
     }
 
-    /**
-     * Scores Technical Analysis based on the 200 SMA (Trend) and 14 RSI (Momentum).
-     * Returns: +1 (Bullish), -1 (Bearish), 0 (Neutral)
-     */
     public int scoreTechnicals(double currentPrice, double sma200, double rsi14) {
         boolean isUptrend = currentPrice > sma200;
         boolean isBullishMomentum = rsi14 > 50.0;
 
         if (isUptrend && isBullishMomentum) {
-            return 1;   // Confirmed bullish trend and momentum
+            return 1;
         } else if (!isUptrend && !isBullishMomentum) {
-            return -1;  // Confirmed bearish trend and momentum
+            return -1;
         } else {
-            return 0;   // Divergence (e.g. Uptrend but losing momentum)
+            return 0;
         }
     }
 }

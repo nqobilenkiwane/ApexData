@@ -3,8 +3,11 @@ package com.uniforex.apexdata.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.uniforex.apexdata.MarketDataClient;
 import com.uniforex.apexdata.model.FredResponse;
+import com.uniforex.apexdata.model.MarketMetric;
+import com.uniforex.apexdata.model.MetricCategory;
 import com.uniforex.apexdata.model.Observation;
 
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 
@@ -20,23 +23,7 @@ public class FredService {
         this.apiKey = apiKey;
     }
 
-    // Expanded DTO holding the new NFP data
-    public record FredMacroData(
-            double interestRate,
-            String interestRateDate,
-            double yoyInflation,
-            String cpiDate,
-            double unemploymentRate,
-            String unemploymentDate,
-            double gdp,
-            String gdpDate,
-            double momRetailSales,
-            String retailSalesDate,
-            double nfpChange,
-            String nfpDate
-    ) {}
-
-    public FredMacroData fetchMacroData() throws Exception {
+    public List<MarketMetric> fetchMacroData() throws Exception {
         String ratesEndpoint = String.format(
                 "https://api.stlouisfed.org/fred/series/observations?series_id=FEDFUNDS&api_key=%s&file_type=json",
                 apiKey
@@ -103,7 +90,7 @@ public class FredService {
         Observation prevRetail = sortedRetail.get(1);
         double momRetailSales = ((latestRetail.getRateAsDouble() - prevRetail.getRateAsDouble()) / prevRetail.getRateAsDouble()) * 100;
 
-        // Fetch & Parse NFP (Calculate month-over-month absolute change)
+        // Fetch & Parse NFP
         String nfpJson = client.fetchRawJson(nfpEndpoint);
         FredResponse nfpResponse = mapper.readValue(nfpJson, FredResponse.class);
         List<Observation> sortedNfp = nfpResponse.observations().stream()
@@ -113,19 +100,14 @@ public class FredService {
         Observation prevNfp = sortedNfp.get(1);
         double nfpChange = latestNfp.getRateAsDouble() - prevNfp.getRateAsDouble();
 
-        return new FredMacroData(
-                latestRate.getRateAsDouble(),
-                latestRate.date(),
-                yoyInflation,
-                latestCpi.date(),
-                latestUnrate.getRateAsDouble(),
-                latestUnrate.date(),
-                latestGdp.getRateAsDouble(),
-                latestGdp.date(),
-                momRetailSales,
-                latestRetail.date(),
-                nfpChange,
-                latestNfp.date()
+        // Return a structured list categorized by our Domain Model
+        return Arrays.asList(
+                new MarketMetric("Interest Rate", latestRate.getRateAsDouble(), 0.0, 0, MetricCategory.ECONOMIC_GROWTH),
+                new MarketMetric("YoY Inflation", yoyInflation, 0.0, 0, MetricCategory.INFLATION),
+                new MarketMetric("Unemployment Rate", latestUnrate.getRateAsDouble(), 0.0, 0, MetricCategory.JOB_MARKET),
+                new MarketMetric("NFP (Jobs)", nfpChange, 0.0, 0, MetricCategory.JOB_MARKET),
+                new MarketMetric("Real GDP", latestGdp.getRateAsDouble(), 0.0, 0, MetricCategory.ECONOMIC_GROWTH),
+                new MarketMetric("Retail Sales (MoM)", momRetailSales, 0.0, 0, MetricCategory.ECONOMIC_GROWTH)
         );
     }
 }
