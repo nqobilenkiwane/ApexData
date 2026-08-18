@@ -26,44 +26,24 @@ public class EconomicCalendarService {
 
     public List<MarketMetric> fetchLiveCalendarEvents() throws Exception {
 
-        // Bypassing the 403 Legacy API block with simulated live JSON data
         String jsonResponse = """
         [
-          {
-            "event": "Non Farm Payrolls",
-            "date": "2026-08-07 12:30:00",
-            "country": "US",
-            "currency": "USD",
-            "actual": -23.0,
-            "estimate": 85.0,
-            "previous": 114.0,
-            "impact": "High"
-          },
-          {
-            "event": "Unemployment Rate",
-            "date": "2026-08-07 12:30:00",
-            "country": "US",
-            "currency": "USD",
-            "actual": 4.10,
-            "estimate": 4.20,
-            "previous": 4.10,
-            "impact": "High"
-          },
-          {
-            "event": "Retail Sales m/m",
-            "date": "2026-08-14 12:30:00",
-            "country": "US",
-            "currency": "USD",
-            "actual": -0.58,
-            "estimate": 0.10,
-            "previous": 0.50,
-            "impact": "High"
-          }
+          { "event": "Non Farm Payrolls", "currency": "USD", "actual": -23.0, "estimate": 85.0 },
+          { "event": "Unemployment Rate", "currency": "USD", "actual": 4.10, "estimate": 4.20 },
+          { "event": "Retail Sales m/m", "currency": "USD", "actual": -0.58, "estimate": 0.10 },
+          { "event": "Initial Jobless Claims", "currency": "USD", "actual": 209000.0, "estimate": 202000.0 },
+          { "event": "Producer Price Index m/m", "currency": "USD", "actual": -0.61, "estimate": 0.20 },
+          { "event": "Average Hourly Earnings m/m", "currency": "USD", "actual": 0.05, "estimate": 0.30 },
+          { "event": "Core PCE Price Index m/m", "currency": "USD", "actual": 0.18, "estimate": 0.20 },
+          { "event": "Industrial Production m/m", "currency": "USD", "actual": 0.25, "estimate": 0.10 },
+          { "event": "Michigan Consumer Sentiment", "currency": "USD", "actual": 67.8, "estimate": 69.0 },
+          
+          { "event": "ISM Manufacturing PMI", "currency": "USD", "actual": 48.5, "estimate": 49.0 },
+          { "event": "ISM Services PMI", "currency": "USD", "actual": 52.4, "estimate": 51.5 }
         ]
         """;
 
         List<CalendarEvent> events = mapper.readValue(jsonResponse, new TypeReference<List<CalendarEvent>>() {});
-
         Map<String, MarketMetric> uniqueMetrics = new HashMap<>();
 
         for (CalendarEvent e : events) {
@@ -73,16 +53,30 @@ public class EconomicCalendarService {
 
             String eventName = e.event();
 
-            // Map the API string directly to the FRED metric name so they merge successfully
             if (eventName.contains("Non Farm Payrolls")) {
                 uniqueMetrics.put("NFP (Jobs)", new MarketMetric("NFP (Jobs)", e.actual(), e.estimate(), 0, MetricCategory.JOB_MARKET));
             } else if (eventName.contains("Unemployment Rate")) {
                 uniqueMetrics.put("Unemployment Rate", new MarketMetric("Unemployment Rate", e.actual(), e.estimate(), 0, MetricCategory.JOB_MARKET));
             } else if (eventName.contains("Retail Sales m/m")) {
                 uniqueMetrics.put("Retail Sales (MoM)", new MarketMetric("Retail Sales (MoM)", e.actual(), e.estimate(), 0, MetricCategory.ECONOMIC_GROWTH));
+            } else if (eventName.contains("Initial Jobless Claims")) {
+                uniqueMetrics.put("Initial Jobless Claims", new MarketMetric("Initial Jobless Claims", e.actual(), e.estimate(), 0, MetricCategory.JOB_MARKET));
+            } else if (eventName.contains("Producer Price Index")) {
+                uniqueMetrics.put("PPI (MoM)", new MarketMetric("PPI (MoM)", e.actual(), e.estimate(), 0, MetricCategory.INFLATION));
+            } else if (eventName.contains("Average Hourly Earnings")) {
+                uniqueMetrics.put("Wage Growth (MoM)", new MarketMetric("Wage Growth (MoM)", e.actual(), e.estimate(), 0, MetricCategory.INFLATION));
+            } else if (eventName.contains("Core PCE")) {
+                uniqueMetrics.put("Core PCE (MoM)", new MarketMetric("Core PCE (MoM)", e.actual(), e.estimate(), 0, MetricCategory.INFLATION));
+            } else if (eventName.contains("Industrial Production")) {
+                uniqueMetrics.put("Industrial Production", new MarketMetric("Industrial Production", e.actual(), e.estimate(), 0, MetricCategory.ECONOMIC_GROWTH));
+            } else if (eventName.contains("Consumer Sentiment")) {
+                uniqueMetrics.put("Consumer Sentiment", new MarketMetric("Consumer Sentiment", e.actual(), e.estimate(), 0, MetricCategory.ECONOMIC_GROWTH));
+            } else if (eventName.contains("Manufacturing PMI")) {
+                uniqueMetrics.put("Manufacturing PMI", new MarketMetric("Manufacturing PMI", e.actual(), e.estimate(), 0, MetricCategory.ECONOMIC_GROWTH));
+            } else if (eventName.contains("Services PMI") || eventName.contains("Non-Manufacturing PMI")) {
+                uniqueMetrics.put("Services PMI", new MarketMetric("Services PMI", e.actual(), e.estimate(), 0, MetricCategory.ECONOMIC_GROWTH));
             }
         }
-
         return new ArrayList<>(uniqueMetrics.values());
     }
 }

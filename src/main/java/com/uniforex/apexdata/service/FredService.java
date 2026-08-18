@@ -24,90 +24,77 @@ public class FredService {
     }
 
     public List<MarketMetric> fetchMacroData() throws Exception {
-        String ratesEndpoint = String.format(
-                "https://api.stlouisfed.org/fred/series/observations?series_id=FEDFUNDS&api_key=%s&file_type=json",
-                apiKey
-        );
-        String cpiEndpoint = String.format(
-                "https://api.stlouisfed.org/fred/series/observations?series_id=CPIAUCSL&api_key=%s&file_type=json",
-                apiKey
-        );
-        String unrateEndpoint = String.format(
-                "https://api.stlouisfed.org/fred/series/observations?series_id=UNRATE&api_key=%s&file_type=json",
-                apiKey
-        );
-        String gdpEndpoint = String.format(
-                "https://api.stlouisfed.org/fred/series/observations?series_id=A191RL1Q225SBEA&api_key=%s&file_type=json",
-                apiKey
-        );
-        String retailEndpoint = String.format(
-                "https://api.stlouisfed.org/fred/series/observations?series_id=RSAFS&api_key=%s&file_type=json",
-                apiKey
-        );
-        String nfpEndpoint = String.format(
-                "https://api.stlouisfed.org/fred/series/observations?series_id=PAYEMS&api_key=%s&file_type=json",
-                apiKey
-        );
+        String ratesEndpoint = String.format("https://api.stlouisfed.org/fred/series/observations?series_id=FEDFUNDS&api_key=%s&file_type=json", apiKey);
+        String cpiEndpoint = String.format("https://api.stlouisfed.org/fred/series/observations?series_id=CPIAUCSL&api_key=%s&file_type=json", apiKey);
+        String unrateEndpoint = String.format("https://api.stlouisfed.org/fred/series/observations?series_id=UNRATE&api_key=%s&file_type=json", apiKey);
+        String gdpEndpoint = String.format("https://api.stlouisfed.org/fred/series/observations?series_id=A191RL1Q225SBEA&api_key=%s&file_type=json", apiKey);
+        String retailEndpoint = String.format("https://api.stlouisfed.org/fred/series/observations?series_id=RSAFS&api_key=%s&file_type=json", apiKey);
+        String nfpEndpoint = String.format("https://api.stlouisfed.org/fred/series/observations?series_id=PAYEMS&api_key=%s&file_type=json", apiKey);
+        String claimsEndpoint = String.format("https://api.stlouisfed.org/fred/series/observations?series_id=ICSA&api_key=%s&file_type=json", apiKey);
+        String ppiEndpoint = String.format("https://api.stlouisfed.org/fred/series/observations?series_id=PPIFDG&api_key=%s&file_type=json", apiKey);
+        String wagesEndpoint = String.format("https://api.stlouisfed.org/fred/series/observations?series_id=CES0500000003&api_key=%s&file_type=json", apiKey);
+        String pceEndpoint = String.format("https://api.stlouisfed.org/fred/series/observations?series_id=PCEPILFE&api_key=%s&file_type=json", apiKey);
+        String indproEndpoint = String.format("https://api.stlouisfed.org/fred/series/observations?series_id=INDPRO&api_key=%s&file_type=json", apiKey);
+        String sentimentEndpoint = String.format("https://api.stlouisfed.org/fred/series/observations?series_id=UMCSENT&api_key=%s&file_type=json", apiKey);
 
-        // Fetch & Parse Interest Rates
-        String ratesJson = client.fetchRawJson(ratesEndpoint);
-        FredResponse ratesResponse = mapper.readValue(ratesJson, FredResponse.class);
-        Observation latestRate = ratesResponse.observations().stream()
-                .max(Comparator.comparing(Observation::date))
-                .orElseThrow(() -> new RuntimeException("No rate data found"));
+        Observation latestRate = getLatestObservation(ratesEndpoint);
+        List<Observation> sortedCpi = getSortedObservations(cpiEndpoint);
+        double yoyInflation = ((sortedCpi.get(0).getRateAsDouble() - sortedCpi.get(12).getRateAsDouble()) / sortedCpi.get(12).getRateAsDouble()) * 100;
 
-        // Fetch & Parse CPI
-        String cpiJson = client.fetchRawJson(cpiEndpoint);
-        FredResponse cpiResponse = mapper.readValue(cpiJson, FredResponse.class);
-        List<Observation> sortedCpi = cpiResponse.observations().stream()
-                .sorted(Comparator.comparing(Observation::date).reversed())
-                .toList();
-        Observation latestCpi = sortedCpi.get(0);
-        Observation yearAgoCpi = sortedCpi.get(12);
-        double yoyInflation = ((latestCpi.getRateAsDouble() - yearAgoCpi.getRateAsDouble()) / yearAgoCpi.getRateAsDouble()) * 100;
+        Observation latestUnrate = getLatestObservation(unrateEndpoint);
+        Observation latestGdp = getLatestObservation(gdpEndpoint);
 
-        // Fetch & Parse Unemployment Rate
-        String unrateJson = client.fetchRawJson(unrateEndpoint);
-        FredResponse unrateResponse = mapper.readValue(unrateJson, FredResponse.class);
-        Observation latestUnrate = unrateResponse.observations().stream()
-                .max(Comparator.comparing(Observation::date))
-                .orElseThrow(() -> new RuntimeException("No unemployment data found"));
+        List<Observation> sortedRetail = getSortedObservations(retailEndpoint);
+        double momRetailSales = ((sortedRetail.get(0).getRateAsDouble() - sortedRetail.get(1).getRateAsDouble()) / sortedRetail.get(1).getRateAsDouble()) * 100;
 
-        // Fetch & Parse Real GDP
-        String gdpJson = client.fetchRawJson(gdpEndpoint);
-        FredResponse gdpResponse = mapper.readValue(gdpJson, FredResponse.class);
-        Observation latestGdp = gdpResponse.observations().stream()
-                .max(Comparator.comparing(Observation::date))
-                .orElseThrow(() -> new RuntimeException("No GDP data found"));
+        List<Observation> sortedNfp = getSortedObservations(nfpEndpoint);
+        double nfpChange = sortedNfp.get(0).getRateAsDouble() - sortedNfp.get(1).getRateAsDouble();
 
-        // Fetch & Parse Retail Sales
-        String retailJson = client.fetchRawJson(retailEndpoint);
-        FredResponse retailResponse = mapper.readValue(retailJson, FredResponse.class);
-        List<Observation> sortedRetail = retailResponse.observations().stream()
-                .sorted(Comparator.comparing(Observation::date).reversed())
-                .toList();
-        Observation latestRetail = sortedRetail.get(0);
-        Observation prevRetail = sortedRetail.get(1);
-        double momRetailSales = ((latestRetail.getRateAsDouble() - prevRetail.getRateAsDouble()) / prevRetail.getRateAsDouble()) * 100;
+        Observation latestClaims = getLatestObservation(claimsEndpoint);
 
-        // Fetch & Parse NFP
-        String nfpJson = client.fetchRawJson(nfpEndpoint);
-        FredResponse nfpResponse = mapper.readValue(nfpJson, FredResponse.class);
-        List<Observation> sortedNfp = nfpResponse.observations().stream()
-                .sorted(Comparator.comparing(Observation::date).reversed())
-                .toList();
-        Observation latestNfp = sortedNfp.get(0);
-        Observation prevNfp = sortedNfp.get(1);
-        double nfpChange = latestNfp.getRateAsDouble() - prevNfp.getRateAsDouble();
+        List<Observation> sortedPpi = getSortedObservations(ppiEndpoint);
+        double momPpi = ((sortedPpi.get(0).getRateAsDouble() - sortedPpi.get(1).getRateAsDouble()) / sortedPpi.get(1).getRateAsDouble()) * 100;
 
-        // Return a structured list categorized by our Domain Model
+        List<Observation> sortedWages = getSortedObservations(wagesEndpoint);
+        double momWages = ((sortedWages.get(0).getRateAsDouble() - sortedWages.get(1).getRateAsDouble()) / sortedWages.get(1).getRateAsDouble()) * 100;
+
+        List<Observation> sortedPce = getSortedObservations(pceEndpoint);
+        double momPce = ((sortedPce.get(0).getRateAsDouble() - sortedPce.get(1).getRateAsDouble()) / sortedPce.get(1).getRateAsDouble()) * 100;
+
+        List<Observation> sortedIndpro = getSortedObservations(indproEndpoint);
+        double momIndpro = ((sortedIndpro.get(0).getRateAsDouble() - sortedIndpro.get(1).getRateAsDouble()) / sortedIndpro.get(1).getRateAsDouble()) * 100;
+
+        Observation latestSentiment = getLatestObservation(sentimentEndpoint);
+
         return Arrays.asList(
                 new MarketMetric("Interest Rate", latestRate.getRateAsDouble(), 0.0, 0, MetricCategory.ECONOMIC_GROWTH),
                 new MarketMetric("YoY Inflation", yoyInflation, 0.0, 0, MetricCategory.INFLATION),
                 new MarketMetric("Unemployment Rate", latestUnrate.getRateAsDouble(), 0.0, 0, MetricCategory.JOB_MARKET),
                 new MarketMetric("NFP (Jobs)", nfpChange, 0.0, 0, MetricCategory.JOB_MARKET),
                 new MarketMetric("Real GDP", latestGdp.getRateAsDouble(), 0.0, 0, MetricCategory.ECONOMIC_GROWTH),
-                new MarketMetric("Retail Sales (MoM)", momRetailSales, 0.0, 0, MetricCategory.ECONOMIC_GROWTH)
+                new MarketMetric("Retail Sales (MoM)", momRetailSales, 0.0, 0, MetricCategory.ECONOMIC_GROWTH),
+                new MarketMetric("Initial Jobless Claims", latestClaims.getRateAsDouble(), 0.0, 0, MetricCategory.JOB_MARKET),
+                new MarketMetric("PPI (MoM)", momPpi, 0.0, 0, MetricCategory.INFLATION),
+                new MarketMetric("Wage Growth (MoM)", momWages, 0.0, 0, MetricCategory.INFLATION),
+                new MarketMetric("Core PCE (MoM)", momPce, 0.0, 0, MetricCategory.INFLATION),
+                new MarketMetric("Industrial Production", momIndpro, 0.0, 0, MetricCategory.ECONOMIC_GROWTH),
+                new MarketMetric("Consumer Sentiment", latestSentiment.getRateAsDouble(), 0.0, 0, MetricCategory.ECONOMIC_GROWTH)
         );
+    }
+
+    private Observation getLatestObservation(String endpoint) throws Exception {
+        String json = client.fetchRawJson(endpoint);
+        FredResponse response = mapper.readValue(json, FredResponse.class);
+        return response.observations().stream()
+                .max(Comparator.comparing(Observation::date))
+                .orElseThrow(() -> new RuntimeException("Data not found"));
+    }
+
+    private List<Observation> getSortedObservations(String endpoint) throws Exception {
+        String json = client.fetchRawJson(endpoint);
+        FredResponse response = mapper.readValue(json, FredResponse.class);
+        return response.observations().stream()
+                .sorted(Comparator.comparing(Observation::date).reversed())
+                .toList();
     }
 }

@@ -19,9 +19,7 @@ public class Main {
     public static void main(String[] args) {
         System.out.println("Initializing Apex Data Engine...");
 
-        // 1. Load the .env file
         Dotenv dotenv = Dotenv.load();
-
         String fredApiKey = dotenv.get("FRED_API_KEY");
         String alphaVantageApiKey = dotenv.get("ALPHA_VANTAGE_API_KEY");
         String fmpApiKey = dotenv.get("FMP_API_KEY");
@@ -43,16 +41,17 @@ public class Main {
         try {
             System.out.println("Fetching Macroeconomic, Institutional & Technical Data...\n");
 
-            // --- 1. FETCH RAW DATA ---
+            // 1. FETCH
             List<MarketMetric> rawFredMetrics = fredService.fetchMacroData();
             CotObservation cotData = cftcService.fetchLatestUsdCot();
             TechnicalService.TechnicalData techData = technicalService.fetchUsdTechnicals();
-
-            // Fetch live calendar estimates from FMP
             List<MarketMetric> fmpCalendarMetrics = calendarService.fetchLiveCalendarEvents();
 
-            // --- 2. ENRICH FRED DATA WITH FMP ESTIMATES ---
-            List<MarketMetric> enrichedMetrics = new ArrayList<>();
+            // 2. ENRICH & MERGE
+            List<MarketMetric> combinedMetrics = new ArrayList<>();
+            List<String> processedNames = new ArrayList<>();
+
+            // A: Update FRED metrics with Calendar Estimates
             for (MarketMetric fred : rawFredMetrics) {
                 double estimate = 0.0;
                 for (MarketMetric fmp : fmpCalendarMetrics) {
@@ -61,11 +60,19 @@ public class Main {
                         break;
                     }
                 }
-                enrichedMetrics.add(new MarketMetric(fred.name(), fred.actualValue(), estimate, 0, fred.category()));
+                combinedMetrics.add(new MarketMetric(fred.name(), fred.actualValue(), estimate, 0, fred.category()));
+                processedNames.add(fred.name());
             }
 
-            // --- 3. APPLY SCORING LOGIC ---
-            List<MarketMetric> scoredMetrics = new ArrayList<>(engine.applyScores(enrichedMetrics));
+            // B: Add metrics that ONLY exist on the Calendar (like ISM PMIs)
+            for (MarketMetric fmp : fmpCalendarMetrics) {
+                if (!processedNames.contains(fmp.name())) {
+                    combinedMetrics.add(fmp);
+                }
+            }
+
+            // 3. SCORE
+            List<MarketMetric> scoredMetrics = new ArrayList<>(engine.applyScores(combinedMetrics));
 
             int institutionalScore = engine.scoreInstitutionalPositioning(cotData.getNetPosition());
             int technicalScore = engine.scoreTechnicals(techData.currentPrice(), techData.sma200(), techData.rsi14());
@@ -73,12 +80,12 @@ public class Main {
             scoredMetrics.add(new MarketMetric("COT Net Positioning", cotData.getNetPosition(), 0.0, institutionalScore, MetricCategory.INSTITUTIONAL_ACTIVITY));
             scoredMetrics.add(new MarketMetric("Technical Momentum", techData.currentPrice(), 0.0, technicalScore, MetricCategory.TECHNICALS));
 
-            // --- 4. AGGREGATE TOTALS ---
+            // 4. AGGREGATE
             Map<MetricCategory, Integer> categoryScores = engine.calculateCategoryScores(scoredMetrics);
             int totalScore = engine.calculateTotalScore(scoredMetrics);
             String overallBias = engine.getOverallBiasLabel(totalScore);
 
-            // --- 5. DYNAMIC DASHBOARD OUTPUT ---
+            // 5. DASHBOARD
             System.out.println("==========================================================================");
             System.out.println("                           APEX DATA DASHBOARD                            ");
             System.out.println("==========================================================================");
@@ -104,6 +111,19 @@ public class Main {
                                     estStr = String.format(" | Est: %+.0fK", m.forecastValue());
                                     surpriseStr = String.format(" | Surp: %+.0fK", (m.actualValue() - m.forecastValue()));
                                 }
+                            } else if (m.name().contains("Claims")) {
+                                valueStr = String.format("%,.0f", m.actualValue());
+                                if (m.forecastValue() != 0.0) {
+                                    estStr = String.format(" | Est: %,.0f", m.forecastValue());
+                                    surpriseStr = String.format(" | Surp: %+,.0f", (m.actualValue() - m.forecastValue()));
+                                }
+                            } else if (m.name().contains("Sentiment") || m.name().contains("PMI")) {
+                                // Both Sentiment and PMIs format as flat index numbers without % signs
+                                valueStr = String.format("%.1f", m.actualValue());
+                                if (m.forecastValue() != 0.0) {
+                                    estStr = String.format(" | Est: %.1f", m.forecastValue());
+                                    surpriseStr = String.format(" | Surp: %+.1f", (m.actualValue() - m.forecastValue()));
+                                }
                             } else {
                                 valueStr = String.format("%,.2f%%", m.actualValue());
                                 if (m.forecastValue() != 0.0) {
@@ -112,12 +132,10 @@ public class Main {
                                 }
                             }
 
-                            // Build the final display line dynamically based on whether estimates exist
-                            String displayLine = String.format("  %-20s | Act: %-16s", m.name(), valueStr);
+                            String displayLine = String.format("  %-22s | Act: %-14s", m.name(), valueStr);
                             if (!estStr.isEmpty()) {
                                 displayLine += String.format("%-16s %-16s", estStr, surpriseStr);
                             } else {
-                                // Add blank spacing to keep columns aligned if no estimate exists
                                 displayLine += String.format("%-33s", "");
                             }
                             displayLine += String.format(" | Score: %+d", m.scoreDelta());
