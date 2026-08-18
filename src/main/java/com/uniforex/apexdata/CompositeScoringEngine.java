@@ -30,34 +30,59 @@ public class CompositeScoringEngine {
 
         for (MarketMetric m : rawMetrics) {
             int score = 0;
-            switch (m.name()) {
-                case "Unemployment Rate":
-                    score = scoreLaborMarket(m.actualValue());
-                    break;
-                case "NFP (Jobs)":
-                    score = scoreNfp(m.actualValue());
-                    break;
-                case "Real GDP":
-                    score = scoreGdp(m.actualValue());
-                    break;
-                case "Retail Sales (MoM)":
-                    score = scoreRetailSales(m.actualValue());
-                    break;
-                case "Interest Rate":
-                    // Attach the combined Real Yield score here
-                    score = realYieldScore;
-                    break;
-                case "YoY Inflation":
-                    // Set to 0 to avoid double-counting the Real Yield score
-                    score = 0;
-                    break;
-                default:
-                    score = 0;
+
+            if (m.name().equals("Interest Rate")) {
+                score = realYieldScore; // Attach the combined Real Yield score here
+            } else if (m.name().equals("YoY Inflation")) {
+                score = 0; // Set to 0 to avoid double-counting the Real Yield score
+            } else if (m.forecastValue() != 0.0) {
+                // NEW: If an estimate exists, score the Surprise Factor!
+                score = scoreSurprise(m);
+            } else {
+                // FALLBACK: If no estimate exists, use the absolute value logic
+                switch (m.name()) {
+                    case "Unemployment Rate":
+                        score = scoreLaborMarket(m.actualValue());
+                        break;
+                    case "NFP (Jobs)":
+                        score = scoreNfp(m.actualValue());
+                        break;
+                    case "Real GDP":
+                        score = scoreGdp(m.actualValue());
+                        break;
+                    case "Retail Sales (MoM)":
+                        score = scoreRetailSales(m.actualValue());
+                        break;
+                    default:
+                        score = 0;
+                }
             }
             // Create a fresh, immutable record with the calculated score
             scoredMetrics.add(new MarketMetric(m.name(), m.actualValue(), m.forecastValue(), score, m.category()));
         }
         return scoredMetrics;
+    }
+
+    /**
+     * Calculates the Surprise Factor (Actual - Forecast) and assigns a directional score.
+     */
+    public int scoreSurprise(MarketMetric metric) {
+        double surprise = metric.actualValue() - metric.forecastValue();
+        double epsilon = 0.0001; // Avoid floating point rounding issues
+
+        if (Math.abs(surprise) < epsilon) {
+            return 0; // Neutral (Met expectations perfectly)
+        }
+
+        // Inverse indicators: Higher than forecast is BAD for the economy/currency
+        boolean isInverse = metric.name().equalsIgnoreCase("Unemployment Rate")
+                || metric.name().contains("Jobless Claims");
+
+        if (isInverse) {
+            return surprise > 0 ? -1 : 1;
+        } else {
+            return surprise > 0 ? 1 : -1;
+        }
     }
 
     /**
@@ -77,6 +102,25 @@ public class CompositeScoringEngine {
     public int calculateTotalScore(List<MarketMetric> scoredMetrics) {
         return scoredMetrics.stream().mapToInt(MarketMetric::scoreDelta).sum();
     }
+
+//    public int scoreSurprise(MarketMetric metric) {
+//        double surprise = metric.actualValue() - metric.forecastValue();
+//        double epsilon = 0.0001; // Avoid floating point rounding issues
+//
+//        if (Math.abs(surprise) < epsilon) {
+//            return 0; // Neutral (Met expectations)
+//        }
+//
+//        // Inverse indicators: Higher than forecast is BAD for currency/growth
+//        boolean isInverse = metric.name().equalsIgnoreCase("Unemployment Rate")
+//                || metric.name().contains("Jobless Claims");
+//
+//        if (isInverse) {
+//            return surprise > 0 ? -1 : 1;
+//        } else {
+//            return surprise > 0 ? 1 : -1;
+//        }
+//    }
 
     // ========================================================================
     // EXISTING SCORING LOGIC (Untouched)
