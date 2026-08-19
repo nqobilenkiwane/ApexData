@@ -105,11 +105,19 @@ public class Main {
                                 valueStr = String.format("%,.0f contracts", m.actualValue());
                             } else if (m.name().contains("Momentum")) {
                                 valueStr = String.format("%,.4f", m.actualValue());
-                            } else if (m.name().contains("NFP")) {
+                            } else if (m.name().contains("NFP") || m.name().contains("ADP")) {
+                                // Group NFP and ADP together since they both use thousands (e.g. +44K)
                                 valueStr = String.format("%+.0fK", m.actualValue());
                                 if (m.forecastValue() != 0.0) {
                                     estStr = String.format(" | Est: %+.0fK", m.forecastValue());
                                     surpriseStr = String.format(" | Surp: %+.0fK", (m.actualValue() - m.forecastValue()));
+                                }
+                            } else if (m.name().contains("JOLTS")) {
+                                // Format JOLTS as Millions
+                                valueStr = String.format("%.2fM", m.actualValue());
+                                if (m.forecastValue() != 0.0) {
+                                    estStr = String.format(" | Est: %.2fM", m.forecastValue());
+                                    surpriseStr = String.format(" | Surp: %+.2fM", (m.actualValue() - m.forecastValue()));
                                 }
                             } else if (m.name().contains("Claims")) {
                                 valueStr = String.format("%,.0f", m.actualValue());
@@ -118,7 +126,6 @@ public class Main {
                                     surpriseStr = String.format(" | Surp: %+,.0f", (m.actualValue() - m.forecastValue()));
                                 }
                             } else if (m.name().contains("Sentiment") || m.name().contains("PMI")) {
-                                // Both Sentiment and PMIs format as flat index numbers without % signs
                                 valueStr = String.format("%.1f", m.actualValue());
                                 if (m.forecastValue() != 0.0) {
                                     estStr = String.format(" | Est: %.1f", m.forecastValue());

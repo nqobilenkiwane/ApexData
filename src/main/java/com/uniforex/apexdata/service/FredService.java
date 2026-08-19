@@ -37,6 +37,9 @@ public class FredService {
         String indproEndpoint = String.format("https://api.stlouisfed.org/fred/series/observations?series_id=INDPRO&api_key=%s&file_type=json", apiKey);
         String sentimentEndpoint = String.format("https://api.stlouisfed.org/fred/series/observations?series_id=UMCSENT&api_key=%s&file_type=json", apiKey);
 
+        // NEW: JOLTS Endpoint
+        String joltsEndpoint = String.format("https://api.stlouisfed.org/fred/series/observations?series_id=JTSJOL&api_key=%s&file_type=json", apiKey);
+
         Observation latestRate = getLatestObservation(ratesEndpoint);
         List<Observation> sortedCpi = getSortedObservations(cpiEndpoint);
         double yoyInflation = ((sortedCpi.get(0).getRateAsDouble() - sortedCpi.get(12).getRateAsDouble()) / sortedCpi.get(12).getRateAsDouble()) * 100;
@@ -66,19 +69,26 @@ public class FredService {
 
         Observation latestSentiment = getLatestObservation(sentimentEndpoint);
 
+        // FETCH JOLTS & Convert to Millions (e.g. 7670 becomes 7.67M)
+        Observation latestJolts = getLatestObservation(joltsEndpoint);
+        double joltsMillions = latestJolts.getRateAsDouble() / 1000.0;
+
         return Arrays.asList(
                 new MarketMetric("Interest Rate", latestRate.getRateAsDouble(), 0.0, 0, MetricCategory.ECONOMIC_GROWTH),
                 new MarketMetric("YoY Inflation", yoyInflation, 0.0, 0, MetricCategory.INFLATION),
                 new MarketMetric("Unemployment Rate", latestUnrate.getRateAsDouble(), 0.0, 0, MetricCategory.JOB_MARKET),
                 new MarketMetric("NFP (Jobs)", nfpChange, 0.0, 0, MetricCategory.JOB_MARKET),
+                new MarketMetric("Initial Jobless Claims", latestClaims.getRateAsDouble(), 0.0, 0, MetricCategory.JOB_MARKET),
+                new MarketMetric("JOLTS Job Openings", joltsMillions, 0.0, 0, MetricCategory.JOB_MARKET), // Added to list
+
                 new MarketMetric("Real GDP", latestGdp.getRateAsDouble(), 0.0, 0, MetricCategory.ECONOMIC_GROWTH),
                 new MarketMetric("Retail Sales (MoM)", momRetailSales, 0.0, 0, MetricCategory.ECONOMIC_GROWTH),
-                new MarketMetric("Initial Jobless Claims", latestClaims.getRateAsDouble(), 0.0, 0, MetricCategory.JOB_MARKET),
+                new MarketMetric("Industrial Production", momIndpro, 0.0, 0, MetricCategory.ECONOMIC_GROWTH),
+                new MarketMetric("Consumer Sentiment", latestSentiment.getRateAsDouble(), 0.0, 0, MetricCategory.ECONOMIC_GROWTH),
+
                 new MarketMetric("PPI (MoM)", momPpi, 0.0, 0, MetricCategory.INFLATION),
                 new MarketMetric("Wage Growth (MoM)", momWages, 0.0, 0, MetricCategory.INFLATION),
-                new MarketMetric("Core PCE (MoM)", momPce, 0.0, 0, MetricCategory.INFLATION),
-                new MarketMetric("Industrial Production", momIndpro, 0.0, 0, MetricCategory.ECONOMIC_GROWTH),
-                new MarketMetric("Consumer Sentiment", latestSentiment.getRateAsDouble(), 0.0, 0, MetricCategory.ECONOMIC_GROWTH)
+                new MarketMetric("Core PCE (MoM)", momPce, 0.0, 0, MetricCategory.INFLATION)
         );
     }
 

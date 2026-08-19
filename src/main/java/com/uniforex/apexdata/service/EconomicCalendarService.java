@@ -37,9 +37,11 @@ public class EconomicCalendarService {
           { "event": "Core PCE Price Index m/m", "currency": "USD", "actual": 0.18, "estimate": 0.20 },
           { "event": "Industrial Production m/m", "currency": "USD", "actual": 0.25, "estimate": 0.10 },
           { "event": "Michigan Consumer Sentiment", "currency": "USD", "actual": 67.8, "estimate": 69.0 },
-          
           { "event": "ISM Manufacturing PMI", "currency": "USD", "actual": 48.5, "estimate": 49.0 },
-          { "event": "ISM Services PMI", "currency": "USD", "actual": 52.4, "estimate": 51.5 }
+          { "event": "ISM Services PMI", "currency": "USD", "actual": 52.4, "estimate": 51.5 },
+          
+          { "event": "JOLTs Job Openings", "currency": "USD", "actual": 7.67, "estimate": 7.80 },
+          { "event": "ADP Nonfarm Employment Change", "currency": "USD", "actual": 44.0, "estimate": 95.0 }
         ]
         """;
 
@@ -75,6 +77,12 @@ public class EconomicCalendarService {
                 uniqueMetrics.put("Manufacturing PMI", new MarketMetric("Manufacturing PMI", e.actual(), e.estimate(), 0, MetricCategory.ECONOMIC_GROWTH));
             } else if (eventName.contains("Services PMI") || eventName.contains("Non-Manufacturing PMI")) {
                 uniqueMetrics.put("Services PMI", new MarketMetric("Services PMI", e.actual(), e.estimate(), 0, MetricCategory.ECONOMIC_GROWTH));
+            } else if (eventName.contains("JOLT") || eventName.contains("Job Openings")) {
+                // Map JOLTS to the Job Market
+                uniqueMetrics.put("JOLTS Job Openings", new MarketMetric("JOLTS Job Openings", e.actual(), e.estimate(), 0, MetricCategory.JOB_MARKET));
+            } else if (eventName.contains("ADP")) {
+                // Map ADP to the Job Market for that direct friction against NFP
+                uniqueMetrics.put("ADP Private Employment", new MarketMetric("ADP Private Employment", e.actual(), e.estimate(), 0, MetricCategory.JOB_MARKET));
             }
         }
         return new ArrayList<>(uniqueMetrics.values());
