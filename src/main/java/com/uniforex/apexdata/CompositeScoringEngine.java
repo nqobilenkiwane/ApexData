@@ -15,31 +15,16 @@ public class CompositeScoringEngine {
      * and returns a new list of fully scored metrics.
      */
     public List<MarketMetric> applyScores(List<MarketMetric> rawMetrics) {
-        // 1. Extract values needed for composite scores (like Real Yield)
-        double interestRate = rawMetrics.stream()
-                .filter(m -> m.name().equals("Interest Rate"))
-                .mapToDouble(MarketMetric::actualValue).findFirst().orElse(0.0);
-        double inflation = rawMetrics.stream()
-                .filter(m -> m.name().equals("YoY Inflation"))
-                .mapToDouble(MarketMetric::actualValue).findFirst().orElse(0.0);
-
-        int realYieldScore = scoreMacroFundamentals(interestRate, inflation);
-
-        // 2. Loop through and score each metric
         List<MarketMetric> scoredMetrics = new ArrayList<>();
 
         for (MarketMetric m : rawMetrics) {
             int score = 0;
 
-            if (m.name().equals("Interest Rate")) {
-                score = realYieldScore; // Attach the combined Real Yield score here
-            } else if (m.name().equals("YoY Inflation")) {
-                score = 0; // Set to 0 to avoid double-counting the Real Yield score
-            } else if (m.forecastValue() != 0.0) {
-                // NEW: If an estimate exists, score the Surprise Factor!
+            if (m.forecastValue() != 0.0) {
+                // PRIORITY: If an estimate (or Moving Average) exists, score the Surprise Factor
                 score = scoreSurprise(m);
             } else {
-                // FALLBACK: If no estimate exists, use the absolute value logic
+                // FALLBACK: Absolute scoring logic for metrics without estimates
                 switch (m.name()) {
                     case "Unemployment Rate":
                         score = scoreLaborMarket(m.actualValue());
@@ -52,6 +37,29 @@ public class CompositeScoringEngine {
                         break;
                     case "Retail Sales (MoM)":
                         score = scoreRetailSales(m.actualValue());
+                        break;
+                    case "10Y Real Yield":
+                        // Positive real yield attracts capital (+1). Negative repels it (-1).
+                        score = m.actualValue() > 0 ? 1 : -1;
+                        break;
+                    case "2s10s Yield Curve":
+                        // Normal curve (+1). Inverted curve means recession risk (-1).
+                        score = m.actualValue() > 0 ? 1 : -1;
+                        break;
+                    case "YoY Inflation":
+                        // If no estimate is available, high inflation is broadly Hawkish/Bullish
+                        score = m.actualValue() > 2.0 ? 1 : -1;
+                        break;
+                    case "COT Net Positioning":
+                        score = m.actualValue() > 0 ? 1 : (m.actualValue() < 0 ? -1 : 0);
+                        break;
+                    case "COT Long Percentage":
+                        double pct = m.actualValue();
+                        if (pct >= 80) score = -1;       // Bearish (Overcrowded Longs)
+                        else if (pct <= 20) score = 1;   // Bullish (Short Squeeze)
+                        else if (pct >= 55) score = 1;   // Bullish (Healthy Trend)
+                        else if (pct <= 45) score = -1;  // Bearish (Healthy Short)
+                        else score = 0;                  // Neutral
                         break;
                     default:
                         score = 0;

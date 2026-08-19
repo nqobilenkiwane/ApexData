@@ -1,7 +1,6 @@
 package com.uniforex.apexdata;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.uniforex.apexdata.model.CotObservation;
 import com.uniforex.apexdata.model.MarketMetric;
 import com.uniforex.apexdata.model.MetricCategory;
 import com.uniforex.apexdata.service.CftcService;
@@ -41,9 +40,9 @@ public class Main {
         try {
             System.out.println("Fetching Macroeconomic, Institutional & Technical Data...\n");
 
-            // 1. FETCH
+            // 1. FETCH ALL DATA
             List<MarketMetric> rawFredMetrics = fredService.fetchMacroData();
-            CotObservation cotData = cftcService.fetchLatestUsdCot();
+            List<MarketMetric> institutionalMetrics = cftcService.fetchInstitutionalData(); // Now returns a list
             TechnicalService.TechnicalData techData = technicalService.fetchUsdTechnicals();
             List<MarketMetric> fmpCalendarMetrics = calendarService.fetchLiveCalendarEvents();
 
@@ -51,9 +50,9 @@ public class Main {
             List<MarketMetric> combinedMetrics = new ArrayList<>();
             List<String> processedNames = new ArrayList<>();
 
-            // A: Update FRED metrics with Calendar Estimates
+            // A: Match FRED metrics with Calendar Estimates
             for (MarketMetric fred : rawFredMetrics) {
-                double estimate = 0.0;
+                double estimate = fred.forecastValue();
                 for (MarketMetric fmp : fmpCalendarMetrics) {
                     if (fmp.name().equals(fred.name())) {
                         estimate = fmp.forecastValue();
@@ -64,20 +63,21 @@ public class Main {
                 processedNames.add(fred.name());
             }
 
-            // B: Add metrics that ONLY exist on the Calendar (like ISM PMIs)
+            // B: Add metrics that ONLY exist on the Calendar
             for (MarketMetric fmp : fmpCalendarMetrics) {
                 if (!processedNames.contains(fmp.name())) {
                     combinedMetrics.add(fmp);
                 }
             }
 
-            // 3. SCORE
+            // C: Inject Institutional Metrics into the master list
+            combinedMetrics.addAll(institutionalMetrics);
+
+            // 3. SCORE EVERYTHING IN ONE PASS
             List<MarketMetric> scoredMetrics = new ArrayList<>(engine.applyScores(combinedMetrics));
 
-            int institutionalScore = engine.scoreInstitutionalPositioning(cotData.getNetPosition());
+            // Technicals remain standalone for now
             int technicalScore = engine.scoreTechnicals(techData.currentPrice(), techData.sma200(), techData.rsi14());
-
-            scoredMetrics.add(new MarketMetric("COT Net Positioning", cotData.getNetPosition(), 0.0, institutionalScore, MetricCategory.INSTITUTIONAL_ACTIVITY));
             scoredMetrics.add(new MarketMetric("Technical Momentum", techData.currentPrice(), 0.0, technicalScore, MetricCategory.TECHNICALS));
 
             // 4. AGGREGATE
@@ -85,7 +85,7 @@ public class Main {
             int totalScore = engine.calculateTotalScore(scoredMetrics);
             String overallBias = engine.getOverallBiasLabel(totalScore);
 
-            // 5. DASHBOARD
+            // 5. DASHBOARD OUTPUT
             System.out.println("==========================================================================");
             System.out.println("                           APEX DATA DASHBOARD                            ");
             System.out.println("==========================================================================");
@@ -101,19 +101,39 @@ public class Main {
                             String estStr = "";
                             String surpriseStr = "";
 
-                            if (m.name().contains("COT")) {
-                                valueStr = String.format("%,.0f contracts", m.actualValue());
+                            // --- NEW CUSTOM CFTC FORMATTING ---
+                            if (m.name().equals("COT Net Positioning")) {
+                                String bias = m.actualValue() >= 0 ? "Long" : "Short";
+                                valueStr = String.format("%,.0f (%s) contracts", Math.abs(m.actualValue()), bias);
+                            } else if (m.name().equals("COT WoW Delta")) {
+                                String actBias = m.actualValue() >= 0 ? "Long" : "Short";
+                                String prevBias = m.forecastValue() >= 0 ? "Long" : "Short";
+                                double diff = m.actualValue() - m.forecastValue();
+                                String diffAction = diff >= 0 ? "Bought" : "Sold";
+
+                                valueStr = String.format("%,.0f (%s)", Math.abs(m.actualValue()), actBias);
+                                estStr = String.format(" | Prev: %,.0f (%s)", Math.abs(m.forecastValue()), prevBias);
+                                surpriseStr = String.format(" | Diff: %+,.0f (%s)", diff, diffAction);
+                            } else if (m.name().equals("COT Long Percentage")) {
+                                valueStr = String.format("%.1f%%", m.actualValue());
+                                String signal = m.actualValue() >= 80 ? "OVERCROWDED" : m.actualValue() <= 20 ? "SHORT SQUEEZE" : m.actualValue() > 50 ? "BULLISH TREND" : "BEARISH TREND";
+                                estStr = String.format(" | Signal: %-19s", signal); // Pad string to keep alignment clean
+                                surpriseStr = "";
+                            }
+                            // --- EXISTING FORMATTING ---
+                            else if (m.name().contains("Momentum") && m.category() == MetricCategory.CAPITAL_FLOWS) {
+                                valueStr = String.format("%+.2f%%", m.actualValue());
+                                estStr = String.format(" | MA: %+.2f%%", m.forecastValue());
+                                surpriseStr = String.format(" | Diff: %+.2f%%", (m.actualValue() - m.forecastValue()));
                             } else if (m.name().contains("Momentum")) {
                                 valueStr = String.format("%,.4f", m.actualValue());
                             } else if (m.name().contains("NFP") || m.name().contains("ADP")) {
-                                // Group NFP and ADP together since they both use thousands (e.g. +44K)
                                 valueStr = String.format("%+.0fK", m.actualValue());
                                 if (m.forecastValue() != 0.0) {
                                     estStr = String.format(" | Est: %+.0fK", m.forecastValue());
                                     surpriseStr = String.format(" | Surp: %+.0fK", (m.actualValue() - m.forecastValue()));
                                 }
                             } else if (m.name().contains("JOLTS")) {
-                                // Format JOLTS as Millions
                                 valueStr = String.format("%.2fM", m.actualValue());
                                 if (m.forecastValue() != 0.0) {
                                     estStr = String.format(" | Est: %.2fM", m.forecastValue());
@@ -139,12 +159,20 @@ public class Main {
                                 }
                             }
 
-                            String displayLine = String.format("  %-22s | Act: %-14s", m.name(), valueStr);
-                            if (!estStr.isEmpty()) {
-                                displayLine += String.format("%-16s %-16s", estStr, surpriseStr);
-                            } else {
-                                displayLine += String.format("%-33s", "");
+                            // Dynamic Layout Assembly
+                            String middlePart = "";
+                            if (!estStr.isEmpty() || !surpriseStr.isEmpty()) {
+                                middlePart = estStr + " " + surpriseStr;
                             }
+
+                            String displayLine = String.format("  %-22s | Act: %-19s", m.name(), valueStr);
+
+                            if (!middlePart.isEmpty()) {
+                                displayLine += String.format("%-42s", middlePart);
+                            } else {
+                                displayLine += String.format("%-42s", "");
+                            }
+
                             displayLine += String.format(" | Score: %+d", m.scoreDelta());
 
                             System.out.println(displayLine);

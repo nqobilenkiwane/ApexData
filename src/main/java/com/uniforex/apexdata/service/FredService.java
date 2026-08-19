@@ -24,7 +24,7 @@ public class FredService {
     }
 
     public List<MarketMetric> fetchMacroData() throws Exception {
-        String ratesEndpoint = String.format("https://api.stlouisfed.org/fred/series/observations?series_id=FEDFUNDS&api_key=%s&file_type=json", apiKey);
+        // --- EXISTING MACRO ENDPOINTS ---
         String cpiEndpoint = String.format("https://api.stlouisfed.org/fred/series/observations?series_id=CPIAUCSL&api_key=%s&file_type=json", apiKey);
         String unrateEndpoint = String.format("https://api.stlouisfed.org/fred/series/observations?series_id=UNRATE&api_key=%s&file_type=json", apiKey);
         String gdpEndpoint = String.format("https://api.stlouisfed.org/fred/series/observations?series_id=A191RL1Q225SBEA&api_key=%s&file_type=json", apiKey);
@@ -36,11 +36,13 @@ public class FredService {
         String pceEndpoint = String.format("https://api.stlouisfed.org/fred/series/observations?series_id=PCEPILFE&api_key=%s&file_type=json", apiKey);
         String indproEndpoint = String.format("https://api.stlouisfed.org/fred/series/observations?series_id=INDPRO&api_key=%s&file_type=json", apiKey);
         String sentimentEndpoint = String.format("https://api.stlouisfed.org/fred/series/observations?series_id=UMCSENT&api_key=%s&file_type=json", apiKey);
-
-        // NEW: JOLTS Endpoint
         String joltsEndpoint = String.format("https://api.stlouisfed.org/fred/series/observations?series_id=JTSJOL&api_key=%s&file_type=json", apiKey);
 
-        Observation latestRate = getLatestObservation(ratesEndpoint);
+        // --- NEW: BOND MARKET ENDPOINTS ---
+        String dgs2Endpoint = String.format("https://api.stlouisfed.org/fred/series/observations?series_id=DGS2&api_key=%s&file_type=json", apiKey);
+        String dgs10Endpoint = String.format("https://api.stlouisfed.org/fred/series/observations?series_id=DGS10&api_key=%s&file_type=json", apiKey);
+
+        // Fetch & Parse Base Macro Data
         List<Observation> sortedCpi = getSortedObservations(cpiEndpoint);
         double yoyInflation = ((sortedCpi.get(0).getRateAsDouble() - sortedCpi.get(12).getRateAsDouble()) / sortedCpi.get(12).getRateAsDouble()) * 100;
 
@@ -68,27 +70,52 @@ public class FredService {
         double momIndpro = ((sortedIndpro.get(0).getRateAsDouble() - sortedIndpro.get(1).getRateAsDouble()) / sortedIndpro.get(1).getRateAsDouble()) * 100;
 
         Observation latestSentiment = getLatestObservation(sentimentEndpoint);
-
-        // FETCH JOLTS & Convert to Millions (e.g. 7670 becomes 7.67M)
         Observation latestJolts = getLatestObservation(joltsEndpoint);
         double joltsMillions = latestJolts.getRateAsDouble() / 1000.0;
 
+        // --- FETCH & CALCULATE BOND MARKET METRICS ---
+        List<Observation> sorted2Y = getSortedObservations(dgs2Endpoint);
+        List<Observation> sorted10Y = getSortedObservations(dgs10Endpoint);
+
+        double latest2Y = sorted2Y.get(0).getRateAsDouble();
+        double latest10Y = sorted10Y.get(0).getRateAsDouble();
+
+        // Calculate 2Y Moving Average (approx 22 trading days in a month)
+        double sum2Y = 0;
+        int limit = Math.min(22, sorted2Y.size());
+        for (int i = 0; i < limit; i++) {
+            sum2Y += sorted2Y.get(i).getRateAsDouble();
+        }
+        double ma2Y = sum2Y / limit;
+
+        // Calculate Yield Derivatives
+        double realYield = latest10Y - yoyInflation;
+        double yieldCurve = latest10Y - latest2Y;
+
         return Arrays.asList(
-                new MarketMetric("Interest Rate", latestRate.getRateAsDouble(), 0.0, 0, MetricCategory.ECONOMIC_GROWTH),
-                new MarketMetric("YoY Inflation", yoyInflation, 0.0, 0, MetricCategory.INFLATION),
+                // JOB MARKET
                 new MarketMetric("Unemployment Rate", latestUnrate.getRateAsDouble(), 0.0, 0, MetricCategory.JOB_MARKET),
                 new MarketMetric("NFP (Jobs)", nfpChange, 0.0, 0, MetricCategory.JOB_MARKET),
                 new MarketMetric("Initial Jobless Claims", latestClaims.getRateAsDouble(), 0.0, 0, MetricCategory.JOB_MARKET),
-                new MarketMetric("JOLTS Job Openings", joltsMillions, 0.0, 0, MetricCategory.JOB_MARKET), // Added to list
+                new MarketMetric("JOLTS Job Openings", joltsMillions, 0.0, 0, MetricCategory.JOB_MARKET),
 
+                // INFLATION
+                new MarketMetric("YoY Inflation", yoyInflation, 0.0, 0, MetricCategory.INFLATION),
+                new MarketMetric("PPI (MoM)", momPpi, 0.0, 0, MetricCategory.INFLATION),
+                new MarketMetric("Wage Growth (MoM)", momWages, 0.0, 0, MetricCategory.INFLATION),
+                new MarketMetric("Core PCE (MoM)", momPce, 0.0, 0, MetricCategory.INFLATION),
+
+                // ECONOMIC GROWTH
                 new MarketMetric("Real GDP", latestGdp.getRateAsDouble(), 0.0, 0, MetricCategory.ECONOMIC_GROWTH),
                 new MarketMetric("Retail Sales (MoM)", momRetailSales, 0.0, 0, MetricCategory.ECONOMIC_GROWTH),
                 new MarketMetric("Industrial Production", momIndpro, 0.0, 0, MetricCategory.ECONOMIC_GROWTH),
                 new MarketMetric("Consumer Sentiment", latestSentiment.getRateAsDouble(), 0.0, 0, MetricCategory.ECONOMIC_GROWTH),
 
-                new MarketMetric("PPI (MoM)", momPpi, 0.0, 0, MetricCategory.INFLATION),
-                new MarketMetric("Wage Growth (MoM)", momWages, 0.0, 0, MetricCategory.INFLATION),
-                new MarketMetric("Core PCE (MoM)", momPce, 0.0, 0, MetricCategory.INFLATION)
+                // CAPITAL FLOWS (New Bond Market Engine)
+                // We pass the MA into the "forecast" field so the Surprise Factor scores momentum automatically!
+                new MarketMetric("2Y Yield Momentum", latest2Y, ma2Y, 0, MetricCategory.CAPITAL_FLOWS),
+                new MarketMetric("10Y Real Yield", realYield, 0.0, 0, MetricCategory.CAPITAL_FLOWS),
+                new MarketMetric("2s10s Yield Curve", yieldCurve, 0.0, 0, MetricCategory.CAPITAL_FLOWS)
         );
     }
 
@@ -96,6 +123,7 @@ public class FredService {
         String json = client.fetchRawJson(endpoint);
         FredResponse response = mapper.readValue(json, FredResponse.class);
         return response.observations().stream()
+                .filter(obs -> !obs.value().equals(".")) // Filter out bank holidays
                 .max(Comparator.comparing(Observation::date))
                 .orElseThrow(() -> new RuntimeException("Data not found"));
     }
@@ -104,6 +132,7 @@ public class FredService {
         String json = client.fetchRawJson(endpoint);
         FredResponse response = mapper.readValue(json, FredResponse.class);
         return response.observations().stream()
+                .filter(obs -> !obs.value().equals(".")) // Filter out bank holidays
                 .sorted(Comparator.comparing(Observation::date).reversed())
                 .toList();
     }
