@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { BarChart, Bar, ReferenceLine, ReferenceArea, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import LogoDark from './LogoDark'
 
 function App() {
   const [summary, setSummary] = useState(null)
@@ -7,7 +8,6 @@ function App() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Fetch both endpoints at the same time
     Promise.all([
       fetch('http://localhost:8080/api/v1/dashboard/summary').then(res => res.json()),
       fetch('http://localhost:8080/api/v1/dashboard/history').then(res => res.json())
@@ -15,7 +15,6 @@ function App() {
       .then(([summaryData, historyData]) => {
         setSummary(summaryData)
 
-        // Format the timestamp for the chart before setting it to state
         const formattedHistory = historyData.map(item => ({
           ...item,
           displayTime: new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -33,7 +32,15 @@ function App() {
   if (loading) return <div style={styles.loading}>Initializing ApexData Engine...</div>
   if (!summary) return <div style={styles.loading}>Failed to load market data.</div>
 
-  const getScoreColor = (score) => {
+  // 1. Strict coloring for the overall -22 to +22 score
+  const getCompositeScoreColor = (score) => {
+    if (score >= 4) return '#00ff88';
+    if (score <= -4) return '#ff3366';
+    return '#888888';
+  };
+
+  // 2. Simple +/- coloring for the individual metrics and categories
+  const getMetricScoreColor = (score) => {
     if (score > 0) return '#00ff88';
     if (score < 0) return '#ff3366';
     return '#888888';
@@ -43,17 +50,16 @@ function App() {
     return cat.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
   }
 
-  // Custom tooltip for the Recharts component
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
         <div style={styles.tooltip}>
           <p style={styles.tooltipLabel}>{label}</p>
           <p style={{ color: '#FFFFFF', fontWeight: 'bold' }}>
-            Score: <span style={{ color: getScoreColor(payload[0].value) }}>{payload[0].value}</span>
+            Score: <span style={{ color: getCompositeScoreColor(payload[0].value) }}>{payload[0].value}</span>
           </p>
           <p style={{ color: '#888888', fontSize: '0.8rem', marginTop: '4px' }}>
-            Bias: {payload[0].payload.biasLabel}
+            Bias: {payload[0].payload.biasLabel || 'Neutral'}
           </p>
         </div>
       );
@@ -64,24 +70,26 @@ function App() {
   return (
     <div style={styles.container}>
       <header style={styles.header}>
-        <h1 style={styles.title}>APEX DATA DASHBOARD</h1>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10px' }}>
+          <LogoDark width={350} height={120} />
+        </div>
         <div style={styles.biasContainer}>
           <div style={styles.scoreBox}>
             <span style={styles.scoreLabel}>USD COMPOSITE SCORE</span>
-            <span style={{...styles.scoreValue, color: getScoreColor(summary.totalScore)}}>
+            <span style={{...styles.scoreValue, color: getCompositeScoreColor(summary.totalScore)}}>
               {summary.totalScore > 0 ? '+' : ''}{summary.totalScore}
             </span>
           </div>
           <div style={styles.biasBox}>
             <span style={styles.scoreLabel}>MARKET BIAS</span>
-            <span style={{...styles.biasValue, color: getScoreColor(summary.totalScore)}}>
+            <span style={{...styles.biasValue, color: getCompositeScoreColor(summary.totalScore)}}>
               {summary.overallBias}
             </span>
           </div>
         </div>
       </header>
 
-      {/* 3. HISTORICAL TREND CHART */}
+      {/* 3. HISTORICAL TREND CHART (ZONE-BASED DIVERGING BAR) */}
       {history.length > 0 && (
         <div style={styles.chartSection}>
           <div style={styles.cardHeader}>
@@ -89,20 +97,25 @@ function App() {
           </div>
           <div style={styles.chartWrapper}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={history} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <BarChart data={history} margin={{ top: 10, right: 10, left: -20, bottom: 0 }} barCategoryGap="10%">
                 <CartesianGrid strokeDasharray="3 3" stroke="#222222" vertical={false} />
                 <XAxis dataKey="displayTime" stroke="#888888" tick={{ fill: '#888888', fontSize: 12 }} tickMargin={10} />
-                <YAxis stroke="#888888" tick={{ fill: '#888888', fontSize: 12 }} />
-                <Tooltip content={<CustomTooltip />} />
-                <Line
-                  type="monotone"
-                  dataKey="totalScore"
-                  stroke="#2563EB"
-                  strokeWidth={3}
-                  dot={{ r: 4, fill: '#2563EB', strokeWidth: 0 }}
-                  activeDot={{ r: 6, fill: '#FFFFFF', stroke: '#2563EB', strokeWidth: 2 }}
-                />
-              </LineChart>
+                <YAxis stroke="#888888" tick={{ fill: '#888888', fontSize: 12 }} domain={[-22, 22]} />
+                <Tooltip content={<CustomTooltip />} cursor={{fill: '#1a1a1a'}} />
+
+                {/* Strongly Bullish (+10 to +22) */}
+                <ReferenceArea y1={10} y2={22} fill="#00ff88" fillOpacity={0.15} />
+                {/* Bullish (+4 to +9.99) */}
+                <ReferenceArea y1={4} y2={9.99} fill="#00ff88" fillOpacity={0.05} />
+
+                {/* Bearish (-4 to -9.99) */}
+                <ReferenceArea y1={-4} y2={-9.99} fill="#ff3366" fillOpacity={0.05} />
+                {/* Strongly Bearish (-10 to -22) */}
+                <ReferenceArea y1={-10} y2={-22} fill="#ff3366" fillOpacity={0.15} />
+
+                <ReferenceLine y={0} stroke="#444444" strokeWidth={2} />
+                <Bar dataKey="totalScore" fill="#E2E8F0" radius={[2, 2, 2, 2]} />
+              </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
@@ -114,7 +127,7 @@ function App() {
           <div key={category} style={styles.card}>
             <div style={styles.cardHeader}>
               <h2 style={styles.cardTitle}>{formatCategory(category)}</h2>
-              <span style={{...styles.catScoreBadge, color: getScoreColor(catScore)}}>
+              <span style={{...styles.catScoreBadge, color: getMetricScoreColor(catScore)}}>
                 {catScore > 0 ? '+' : ''}{catScore}
               </span>
             </div>
@@ -135,7 +148,7 @@ function App() {
                         </span>
                       )}
                     </div>
-                    <div style={{...styles.metricScore, color: getScoreColor(metric.scoreDelta)}}>
+                    <div style={{...styles.metricScore, color: getMetricScoreColor(metric.scoreDelta)}}>
                       {metric.scoreDelta > 0 ? '+' : ''}{metric.scoreDelta}
                     </div>
                   </div>
@@ -152,7 +165,6 @@ const styles = {
   container: { backgroundColor: '#000000', minHeight: '100vh', color: '#FFFFFF', fontFamily: "'Inter', 'Segoe UI', sans-serif", padding: '40px 20px' },
   loading: { backgroundColor: '#000000', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563EB', fontSize: '24px', fontFamily: 'monospace' },
   header: { maxWidth: '1200px', margin: '0 auto 40px', textAlign: 'center' },
-  title: { color: '#FFFFFF', letterSpacing: '2px', fontSize: '2.5rem', marginBottom: '30px' },
   biasContainer: { display: 'flex', justifyContent: 'center', gap: '20px' },
 
   scoreBox: { backgroundColor: '#111111', padding: '20px 40px', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', border: '1px solid #222222' },
@@ -162,7 +174,7 @@ const styles = {
   biasValue: { fontSize: '2.5rem', fontWeight: 'bold' },
 
   chartSection: { maxWidth: '1400px', margin: '0 auto 40px', backgroundColor: '#111111', borderRadius: '8px', padding: '25px', border: '1px solid #222222' },
-  chartWrapper: { height: '300px', width: '100%', marginTop: '20px' },
+  chartWrapper: { height: '350px', width: '100%', marginTop: '20px' },
 
   tooltip: { backgroundColor: '#000000', padding: '15px', border: '1px solid #222222', borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' },
   tooltipLabel: { margin: '0 0 8px 0', color: '#888888', fontSize: '0.9rem', borderBottom: '1px solid #222222', paddingBottom: '4px' },

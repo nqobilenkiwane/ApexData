@@ -158,12 +158,23 @@ public class CompositeScoringEngine {
     }
 
     public String getOverallBiasLabel(int totalScore) {
-        if (totalScore >= 2) return "STRONGLY BULLISH";
-        if (totalScore == 1) return "BULLISH";
-        if (totalScore == 0) return "NEUTRAL";
-        if (totalScore == -1) return "BEARISH";
-        if (totalScore <= -2) return "STRONGLY BEARISH";
-        return "UNKNOWN";
+        if (totalScore >= 10) {
+            return "STRONGLY BULLISH";
+        } else if (totalScore >= 4) {
+            return "BULLISH";
+        } else if (totalScore >= -3) {
+            return "NEUTRAL";
+        } else if (totalScore >= -9) {
+            return "BEARISH";
+        } else {
+            return "STRONGLY BEARISH";
+        }
+//        if (totalScore > 9) return "STRONGLY BULLISH";
+//        if (totalScore >= 4) return "BULLISH";
+//        if (totalScore == 0) return "NEUTRAL";
+//        if (totalScore <= -4) return "BEARISH";
+//        if (totalScore < -9) return "STRONGLY BEARISH";
+//        return "UNKNOWN";
     }
 
     public int scoreLaborMarket(double unemploymentRate) {
