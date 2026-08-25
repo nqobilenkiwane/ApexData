@@ -14,10 +14,10 @@ function App() {
     ])
       .then(([summaryData, historyData]) => {
         setSummary(summaryData)
-
         const formattedHistory = historyData.map(item => ({
           ...item,
-          displayTime: new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          // Changed to displayDate and formatted to show "Aug 25"
+          displayDate: new Date(item.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
         }))
         setHistory(formattedHistory)
 
@@ -99,7 +99,7 @@ function App() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={history} margin={{ top: 10, right: 10, left: -20, bottom: 0 }} barCategoryGap="10%">
                 <CartesianGrid strokeDasharray="3 3" stroke="#222222" vertical={false} />
-                <XAxis dataKey="displayTime" stroke="#888888" tick={{ fill: '#888888', fontSize: 12 }} tickMargin={10} />
+                <XAxis dataKey="displayDate" stroke="#888888" tick={{ fill: '#888888', fontSize: 12 }} tickMargin={10} />
                 <YAxis stroke="#888888" tick={{ fill: '#888888', fontSize: 12 }} domain={[-22, 22]} />
                 <Tooltip content={<CustomTooltip />} cursor={{fill: '#1a1a1a'}} />
 
