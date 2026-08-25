@@ -10,12 +10,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 public class Main {
 
     public static void main(String[] args) {
-        try {
-            Dotenv dotenv = Dotenv.load();
-            dotenv.entries().forEach(entry -> System.setProperty(entry.getKey(), entry.getValue()));
-        } catch (Exception e) {
-            System.out.println("No local .env file found, relying on system environment variables.");
-        }
 
         System.out.println("Starting ApexData Spring Boot Server...");
 
