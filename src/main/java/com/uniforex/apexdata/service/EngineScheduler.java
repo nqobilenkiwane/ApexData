@@ -64,25 +64,29 @@ public class EngineScheduler {
                             e -> new MarketMetric(e.getMetricName(), e.getActualValue(), e.getEstimateValue(), 0, e.getCategory())
                     ));
 
-            // 2. Fetch live data with staggered delays to prevent rate limits and RST_STREAM errors
+// 2. Fetch live data with trace logging
+            System.out.println("[SYSTEM] Fetching FRED data...");
             List<MarketMetric> rawFredMetrics = new ArrayList<>();
             try {
                 rawFredMetrics = fredService.fetchMacroData();
-                Thread.sleep(2000);
+                Thread.sleep(1000);
             } catch (Exception e) { System.err.println("[API Error] FRED: " + e.getMessage()); }
 
+            System.out.println("[SYSTEM] Fetching CFTC data...");
             List<MarketMetric> institutionalMetrics = new ArrayList<>();
             try {
                 institutionalMetrics = cftcService.fetchInstitutionalData();
-                Thread.sleep(2000);
+                Thread.sleep(1000);
             } catch (Exception e) { System.err.println("[API Error] CFTC: " + e.getMessage()); }
 
+            System.out.println("[SYSTEM] Fetching Technicals...");
             TechnicalService.TechnicalData techData = new TechnicalService.TechnicalData(0.0, 0.0, 0.0);
             try {
                 techData = technicalService.fetchUsdTechnicals();
-                Thread.sleep(2000);
+                Thread.sleep(1000);
             } catch (Exception e) { System.err.println("[API Error] Technicals: " + e.getMessage()); }
 
+            System.out.println("[SYSTEM] Fetching Economic Calendar...");
             List<MarketMetric> liveCalendarEvents = new ArrayList<>();
             try {
                 liveCalendarEvents = calendarService.fetchLiveCalendarEvents();
