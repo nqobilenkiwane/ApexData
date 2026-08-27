@@ -13,7 +13,7 @@ public class MarketDataClient {
     public MarketDataClient() {
         this.httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
-                .connectTimeout(Duration.ofSeconds(10))
+                .connectTimeout(Duration.ofSeconds(30))
                 .build();
     }
 
@@ -21,7 +21,7 @@ public class MarketDataClient {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(endpointURL))
                 .GET()
-                .timeout(Duration.ofSeconds(10))
+                .timeout(Duration.ofSeconds(30))
                 .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36") // Add this line!
                 .header("Accept", "application/json")
                 .build();
