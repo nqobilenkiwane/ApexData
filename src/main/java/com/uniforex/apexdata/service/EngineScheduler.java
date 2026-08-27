@@ -24,7 +24,7 @@ public class EngineScheduler {
 
     private final CalendarEventRepository calendarRepo;
     private final HistoricalScoreRepository historyRepo;
-    private final DashboardStateService stateService; // Fixed: Made final
+    private final DashboardStateService stateService;
 
     private final FredService fredService;
     private final CftcService cftcService;
@@ -32,7 +32,6 @@ public class EngineScheduler {
     private final EconomicCalendarService calendarService;
     private final CompositeScoringEngine engine;
 
-    // Fixed: Injected DashboardStateService into the constructor
     public EngineScheduler(
             CalendarEventRepository calendarRepo,
             HistoricalScoreRepository historyRepo,
@@ -44,7 +43,6 @@ public class EngineScheduler {
         this.historyRepo = historyRepo;
         this.stateService = stateService;
 
-        // Bridge your existing manual classes into the Spring context
         MarketDataClient client = new MarketDataClient();
         ObjectMapper mapper = new ObjectMapper();
         this.engine = new CompositeScoringEngine();
@@ -55,25 +53,42 @@ public class EngineScheduler {
         this.calendarService = new EconomicCalendarService(client, mapper, null);
     }
 
-    // Runs immediately on startup, then loops every 4 hours (14,400,000 milliseconds)
     @Scheduled(fixedRate = 14400000)
     public void executeMarketAnalysis() {
         System.out.println("\n[SYSTEM] Executing Automated Market Analysis Cycle...");
         try {
-            // 1. Load historical state from PostgreSQL using Spring Data JPA
+            // 1. Load historical state
             Map<String, MarketMetric> persistedState = calendarRepo.findAll().stream()
                     .collect(Collectors.toMap(
                             CalendarEventEntity::getMetricName,
                             e -> new MarketMetric(e.getMetricName(), e.getActualValue(), e.getEstimateValue(), 0, e.getCategory())
                     ));
 
-            // 2. Fetch live data
-            List<MarketMetric> rawFredMetrics = fredService.fetchMacroData();
-            List<MarketMetric> institutionalMetrics = cftcService.fetchInstitutionalData();
-            TechnicalService.TechnicalData techData = technicalService.fetchUsdTechnicals();
-            List<MarketMetric> liveCalendarEvents = calendarService.fetchLiveCalendarEvents();
+            // 2. Fetch live data with staggered delays to prevent rate limits and RST_STREAM errors
+            List<MarketMetric> rawFredMetrics = new ArrayList<>();
+            try {
+                rawFredMetrics = fredService.fetchMacroData();
+                Thread.sleep(2000);
+            } catch (Exception e) { System.err.println("[API Error] FRED: " + e.getMessage()); }
 
-            // 3. Persist new live calendar prints into PostgreSQL (The Upsert)
+            List<MarketMetric> institutionalMetrics = new ArrayList<>();
+            try {
+                institutionalMetrics = cftcService.fetchInstitutionalData();
+                Thread.sleep(2000);
+            } catch (Exception e) { System.err.println("[API Error] CFTC: " + e.getMessage()); }
+
+            TechnicalService.TechnicalData techData = new TechnicalService.TechnicalData(0.0, 0.0, 0.0);
+            try {
+                techData = technicalService.fetchUsdTechnicals();
+                Thread.sleep(2000);
+            } catch (Exception e) { System.err.println("[API Error] Technicals: " + e.getMessage()); }
+
+            List<MarketMetric> liveCalendarEvents = new ArrayList<>();
+            try {
+                liveCalendarEvents = calendarService.fetchLiveCalendarEvents();
+            } catch (Exception e) { System.err.println("[API Error] Calendar: " + e.getMessage()); }
+
+            // 3. Upsert live calendar prints
             for (MarketMetric event : liveCalendarEvents) {
                 calendarRepo.save(new CalendarEventEntity(event.name(), event.actualValue(), event.forecastValue(), event.category()));
                 persistedState.put(event.name(), event);
@@ -100,18 +115,21 @@ public class EngineScheduler {
 
             // 5. Score engine pass
             List<MarketMetric> scoredMetrics = new ArrayList<>(engine.applyScores(combinedMetrics));
-            int techScore = engine.scoreTechnicals(techData.currentPrice(), techData.sma200(), techData.rsi14());
-            scoredMetrics.add(new MarketMetric("Technical Momentum", techData.currentPrice(), 0.0, techScore, MetricCategory.TECHNICALS));
 
-            // Fixed: Consolidating calculations and avoiding duplication
+            // Only score technicals if the API call was successful
+            if (techData.currentPrice() > 0) {
+                int techScore = engine.scoreTechnicals(techData.currentPrice(), techData.sma200(), techData.rsi14());
+                scoredMetrics.add(new MarketMetric("Technical Momentum", techData.currentPrice(), 0.0, techScore, MetricCategory.TECHNICALS));
+            }
+
             int totalScore = engine.calculateTotalScore(scoredMetrics);
             String overallBias = engine.getOverallBiasLabel(totalScore);
             Map<MetricCategory, Integer> categoryScores = engine.calculateCategoryScores(scoredMetrics);
 
-            // 6. Save to the Historical Ledger (Table 2)
+            // 6. Save to Ledger
             historyRepo.save(new HistoricalScoreEntity("USD", totalScore, overallBias));
 
-            // 7. Push the fully computed dashboard to the in-memory state service
+            // 7. Update Dashboard State
             DashboardSummaryResponse summary = new DashboardSummaryResponse(
                     totalScore, overallBias, categoryScores, scoredMetrics
             );
