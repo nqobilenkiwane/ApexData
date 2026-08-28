@@ -36,7 +36,7 @@ public class FredService {
         String gdpEndpoint = String.format("https://www.alphavantage.co/query?function=REAL_GDP&interval=quarterly&apikey=%s", apiKey);
         String retailEndpoint = String.format("https://www.alphavantage.co/query?function=RETAIL_SALES&apikey=%s", apiKey);
         String nfpEndpoint = String.format("https://www.alphavantage.co/query?function=NONFARM_PAYROLL&apikey=%s", apiKey);
-        String sentimentEndpoint = String.format("https://www.alphavantage.co/query?function=CONSUMER_SENTIMENT&apikey=%s", apiKey);
+        //String sentimentEndpoint = String.format("https://www.alphavantage.co/query?function=CONSUMER_SENTIMENT&apikey=%s", apiKey);
 
         // Treasury Yield Curve Endpoints
         String dgs2Endpoint = String.format("https://www.alphavantage.co/query?function=TREASURY_YIELD&interval=daily&maturity=2year&apikey=%s", apiKey);
@@ -55,7 +55,7 @@ public class FredService {
         List<Observation> sortedNfp = getSortedObservations(nfpEndpoint);
         double nfpChange = sortedNfp.get(0).getRateAsDouble() - sortedNfp.get(1).getRateAsDouble();
 
-        Observation latestSentiment = getLatestObservation(sentimentEndpoint);
+        //Observation latestSentiment = getLatestObservation(sentimentEndpoint);
 
         // Bond Market Calculations
         List<Observation> sorted2Y = getSortedObservations(dgs2Endpoint);
@@ -80,7 +80,7 @@ public class FredService {
                 new MarketMetric("YoY Inflation", yoyInflation, 0.0, 0, MetricCategory.INFLATION),
                 new MarketMetric("Real GDP", latestGdp.getRateAsDouble(), 0.0, 0, MetricCategory.ECONOMIC_GROWTH),
                 new MarketMetric("Retail Sales (MoM)", momRetailSales, 0.0, 0, MetricCategory.ECONOMIC_GROWTH),
-                new MarketMetric("Consumer Sentiment", latestSentiment.getRateAsDouble(), 0.0, 0, MetricCategory.ECONOMIC_GROWTH),
+                //new MarketMetric("Consumer Sentiment", latestSentiment.getRateAsDouble(), 0.0, 0, MetricCategory.ECONOMIC_GROWTH),
                 new MarketMetric("2Y Yield Momentum", latest2Y, ma2Y, 0, MetricCategory.CAPITAL_FLOWS),
                 new MarketMetric("10Y Real Yield", realYield, 0.0, 0, MetricCategory.CAPITAL_FLOWS),
                 new MarketMetric("2s10s Yield Curve", yieldCurve, 0.0, 0, MetricCategory.CAPITAL_FLOWS)
