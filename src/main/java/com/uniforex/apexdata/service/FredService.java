@@ -90,18 +90,38 @@ public class FredService {
     private Observation getLatestObservation(String endpoint) throws Exception {
         String json = client.fetchRawJson(endpoint);
         AlphaResponse response = mapper.readValue(json, AlphaResponse.class);
-        return response.data().stream()
-                .filter(obs -> !obs.value().equals("."))
+
+        // Safety check to explicitly catch API limit warnings instead of throwing a NullPointerException
+        if (response.data() == null) {
+            throw new RuntimeException("Alpha Vantage API Blocked/Rate Limited: " + json);
+        }
+
+        Observation obs = response.data().stream()
+                .filter(o -> !o.value().equals("."))
                 .max(Comparator.comparing(Observation::date))
                 .orElseThrow(() -> new RuntimeException("Data not found"));
+
+        // 12.5-second delay to guarantee < 5 requests per minute
+        Thread.sleep(12500);
+        return obs;
     }
 
     private List<Observation> getSortedObservations(String endpoint) throws Exception {
         String json = client.fetchRawJson(endpoint);
         AlphaResponse response = mapper.readValue(json, AlphaResponse.class);
-        return response.data().stream()
-                .filter(obs -> !obs.value().equals("."))
+
+        // Safety check to explicitly catch API limit warnings instead of throwing a NullPointerException
+        if (response.data() == null) {
+            throw new RuntimeException("Alpha Vantage API Blocked/Rate Limited: " + json);
+        }
+
+        List<Observation> list = response.data().stream()
+                .filter(o -> !o.value().equals("."))
                 .sorted(Comparator.comparing(Observation::date).reversed())
                 .toList();
+
+        // 12.5-second delay to guarantee < 5 requests per minute
+        Thread.sleep(12500);
+        return list;
     }
 }
