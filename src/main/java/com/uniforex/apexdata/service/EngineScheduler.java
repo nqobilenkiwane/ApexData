@@ -47,7 +47,8 @@ public class EngineScheduler {
         ObjectMapper mapper = new ObjectMapper();
         this.engine = new CompositeScoringEngine();
 
-        this.fredService = new FredService(client, mapper, fredApiKey);
+        // Change this line in EngineScheduler.java:
+        this.fredService = new FredService(client, mapper, alphaApiKey);
         this.cftcService = new CftcService(client, mapper);
         this.technicalService = new TechnicalService(client, mapper, alphaApiKey);
         this.calendarService = new EconomicCalendarService(client, mapper, null);
