@@ -48,13 +48,13 @@ public class EngineScheduler {
         this.engine = new CompositeScoringEngine();
 
         // Change this line in EngineScheduler.java:
-        this.fredService = new FredService(client, mapper, alphaApiKey);
+        this.fredService = new FredService(client, mapper, fredApiKey);
         this.cftcService = new CftcService(client, mapper);
         this.technicalService = new TechnicalService(client, mapper, alphaApiKey);
         this.calendarService = new EconomicCalendarService(client, mapper, null);
     }
 
-    @Scheduled(fixedRate = 14400000)
+    @Scheduled(fixedRate = 3600000)
     public void executeMarketAnalysis() {
         System.out.println("\n[SYSTEM] Executing Automated Market Analysis Cycle...");
         try {
