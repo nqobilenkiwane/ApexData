@@ -25,22 +25,22 @@ public class FredService {
 
     public List<MarketMetric> fetchMacroData() throws Exception {
         // --- EXISTING MACRO ENDPOINTS ---
-        String cpiEndpoint = String.format("https://fred-proxy.nqobilenkiwane01.workers.dev/fred/series/observations?series_id=CPIAUCSL&api_key=%s&file_type=json", apiKey);
-        String unrateEndpoint = String.format("https://fred-proxy.nqobilenkiwane01.workers.dev/fred/series/observations?series_id=UNRATE&api_key=%s&file_type=json", apiKey);
-        String gdpEndpoint = String.format("https://fred-proxy.nqobilenkiwane01.workers.dev/fred/series/observations?series_id=A191RL1Q225SBEA&api_key=%s&file_type=json", apiKey);
-        String retailEndpoint = String.format("https://fred-proxy.nqobilenkiwane01.workers.dev/fred/series/observations?series_id=RSAFS&api_key=%s&file_type=json", apiKey);
-        String nfpEndpoint = String.format("https://fred-proxy.nqobilenkiwane01.workers.dev/fred/series/observations?series_id=PAYEMS&api_key=%s&file_type=json", apiKey);
-        String claimsEndpoint = String.format("https://fred-proxy.nqobilenkiwane01.workers.dev/fred/series/observations?series_id=ICSA&api_key=%s&file_type=json", apiKey);
-        String ppiEndpoint = String.format("https://fred-proxy.nqobilenkiwane01.workers.dev/fred/series/observations?series_id=PPIFDG&api_key=%s&file_type=json", apiKey);
-        String wagesEndpoint = String.format("https://fred-proxy.nqobilenkiwane01.workers.dev/fred/series/observations?series_id=CES0500000003&api_key=%s&file_type=json", apiKey);
-        String pceEndpoint = String.format("https://fred-proxy.nqobilenkiwane01.workers.dev/fred/series/observations?series_id=PCEPILFE&api_key=%s&file_type=json", apiKey);
-        String indproEndpoint = String.format("https://fred-proxy.nqobilenkiwane01.workers.dev/fred/series/observations?series_id=INDPRO&api_key=%s&file_type=json", apiKey);
-        String sentimentEndpoint = String.format("https://fred-proxy.nqobilenkiwane01.workers.dev/fred/series/observations?series_id=UMCSENT&api_key=%s&file_type=json", apiKey);
-        String joltsEndpoint = String.format("https://fred-proxy.nqobilenkiwane01.workers.dev/fred/series/observations?series_id=JTSJOL&api_key=%s&file_type=json", apiKey);
+        String cpiEndpoint = String.format("https://data.nasdaq.com/api/v3/datasets/FRED/CPIAUCSL.json?api_key=%s", apiKey);
+        String unrateEndpoint = String.format("https://data.nasdaq.com/api/v3/datasets/FRED/UNRATE.json?api_key=%s", apiKey);
+        String gdpEndpoint = String.format("https://data.nasdaq.com/api/v3/datasets/FRED/A191RL1Q225SBEA.json?api_key=%s", apiKey);
+        String retailEndpoint = String.format("https://data.nasdaq.com/api/v3/datasets/FRED/RSAFS.json?api_key=%s", apiKey);
+        String nfpEndpoint = String.format("https://data.nasdaq.com/api/v3/datasets/FRED/PAYEMS.json?api_key=%s", apiKey);
+        String claimsEndpoint = String.format("https://data.nasdaq.com/api/v3/datasets/FRED/ICSA.json?api_key=%s", apiKey);
+        String ppiEndpoint = String.format("https://data.nasdaq.com/api/v3/datasets/FRED/PPIFDG.json?api_key=%s", apiKey);
+        String wagesEndpoint = String.format("https://data.nasdaq.com/api/v3/datasets/FRED/CES0500000003.json?api_key=%s", apiKey);
+        String pceEndpoint = String.format("https://data.nasdaq.com/api/v3/datasets/FRED/PCEPILFE.json?api_key=%s", apiKey);
+        String indproEndpoint = String.format("https://data.nasdaq.com/api/v3/datasets/FRED/INDPRO.json?api_key=%s", apiKey);
+        String sentimentEndpoint = String.format("https://data.nasdaq.com/api/v3/datasets/FRED/UMCSENT.json?api_key=%s", apiKey);
+        String joltsEndpoint = String.format("https://data.nasdaq.com/api/v3/datasets/FRED/JTSJOL.json?api_key=%s", apiKey);
 
         // --- NEW: BOND MARKET ENDPOINTS ---
-        String dgs2Endpoint = String.format("https://fred-proxy.nqobilenkiwane01.workers.dev/fred/series/observations?series_id=DGS2&api_key=%s&file_type=json", apiKey);
-        String dgs10Endpoint = String.format("https://fred-proxy.nqobilenkiwane01.workers.dev/fred/series/observations?series_id=DGS10&api_key=%s&file_type=json", apiKey);
+        String dgs2Endpoint = String.format("https://data.nasdaq.com/api/v3/datasets/FRED/DGS2.json?api_key=%s", apiKey);
+        String dgs10Endpoint = String.format("https://data.nasdaq.com/api/v3/datasets/FRED/DGS10.json?api_key=%s", apiKey);
 
         // Fetch & Parse Base Macro Data
         List<Observation> sortedCpi = getSortedObservations(cpiEndpoint);
