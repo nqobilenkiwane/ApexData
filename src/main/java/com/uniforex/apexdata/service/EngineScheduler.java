@@ -67,6 +67,8 @@ public class EngineScheduler {
             try {
                 institutionalMetrics = cftcService.fetchInstitutionalData();
                 Thread.sleep(1000);
+                // After CFTC fetch
+                System.out.println("[DEBUG] CFTC Metrics Found: " + institutionalMetrics.size());
             } catch (Exception e) { System.err.println("[API Error] CFTC: " + e.getMessage()); }
 
             System.out.println("[SYSTEM] Fetching Technicals...");
@@ -74,12 +76,19 @@ public class EngineScheduler {
             try {
                 techData = technicalService.fetchUsdTechnicals();
                 Thread.sleep(1000);
+                // After Technicals fetch
+                System.out.println("[DEBUG] Tech Price: " + techData.currentPrice());
+                if (techData.currentPrice() == 0.0) {
+                    System.out.println("[DEBUG] Warning: Technicals returned 0.0. Check Alpha Vantage rate limits or weekend closures.");
+                }
             } catch (Exception e) { System.err.println("[API Error] Technicals: " + e.getMessage()); }
 
             System.out.println("[SYSTEM] Fetching Economic Calendar...");
             List<MarketMetric> liveCalendarEvents = new ArrayList<>();
             try {
                 liveCalendarEvents = calendarService.fetchLiveCalendarEvents();
+                // After Calendar fetch
+                System.out.println("[DEBUG] Calendar Events Found: " + liveCalendarEvents.size());
             } catch (Exception e) { System.err.println("[API Error] Calendar: " + e.getMessage()); }
 
             // 3. Upsert live calendar prints (Updates the cache with this week's data)
