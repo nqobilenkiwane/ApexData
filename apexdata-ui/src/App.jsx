@@ -7,29 +7,36 @@ function App() {
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    // Vite uses import.meta.env. Create React App uses process.env
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://apexdata-production-dc24.up.railway.app';
+useEffect(() => {
+    const baseUrl = 'https://apexdata-production-dc24.up.railway.app';
+
     Promise.all([
-        fetch('https://apexdata-production-dc24.up.railway.app/api/v1/dashboard/summary').then(res => res.json()),
-        fetch('https://apexdata-production-dc24.up.railway.app/api/v1/dashboard/history').then(res => res.json())
+      fetch(`${baseUrl}/api/dashboard/summary`).then(res => {
+        if (!res.ok) throw new Error(`Summary API failed with status ${res.status}`);
+        return res.json();
+      }),
+      fetch(`${baseUrl}/api/dashboard/history`).then(res => {
+        if (!res.ok) throw new Error(`History API failed with status ${res.status}`);
+        return res.json();
+      })
     ])
       .then(([summaryData, historyData]) => {
-        setSummary(summaryData)
-        const formattedHistory = historyData.map(item => ({
-          ...item,
-          // Changed to displayDate and formatted to show "Aug 25"
-          displayDate: new Date(item.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-        }))
-        setHistory(formattedHistory)
-
-        setLoading(false)
+        setSummary(summaryData);
+        if (Array.isArray(historyData)) {
+          const formattedHistory = historyData.map(item => ({
+            ...item,
+            displayDate: new Date(item.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+          }));
+          setHistory(formattedHistory);
+        }
+        setLoading(false);
       })
       .catch(error => {
-        console.error("Error fetching data:", error)
-        setLoading(false)
-      })
-  }, [])
+        console.error("Error fetching data:", error);
+        setSummary(null);
+        setLoading(false);
+      });
+  }, []);
 
   if (loading) return <div style={styles.loading}>Initializing ApexData Engine...</div>
   if (!summary) return <div style={styles.loading}>Failed to load market data.</div>
