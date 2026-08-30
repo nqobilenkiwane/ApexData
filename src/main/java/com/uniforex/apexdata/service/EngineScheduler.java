@@ -26,7 +26,6 @@ public class EngineScheduler {
     private final HistoricalScoreRepository historyRepo;
     private final DashboardStateService stateService;
 
-    private final FredService fredService;
     private final CftcService cftcService;
     private final TechnicalService technicalService;
     private final EconomicCalendarService calendarService;
@@ -36,7 +35,6 @@ public class EngineScheduler {
             CalendarEventRepository calendarRepo,
             HistoricalScoreRepository historyRepo,
             DashboardStateService stateService,
-            @Value("${FRED_API_KEY}") String fredApiKey,
             @Value("${ALPHA_VANTAGE_API_KEY}") String alphaApiKey) {
 
         this.calendarRepo = calendarRepo;
@@ -47,32 +45,23 @@ public class EngineScheduler {
         ObjectMapper mapper = new ObjectMapper();
         this.engine = new CompositeScoringEngine();
 
-        // Change this line in EngineScheduler.java:
-        this.fredService = new FredService(client, mapper, fredApiKey);
         this.cftcService = new CftcService(client, mapper);
         this.technicalService = new TechnicalService(client, mapper, alphaApiKey);
         this.calendarService = new EconomicCalendarService(client, mapper, null);
     }
 
-    @Scheduled(fixedRate = 3600000)
+    @Scheduled(fixedRate = 14400000)
     public void executeMarketAnalysis() {
         System.out.println("\n[SYSTEM] Executing Automated Market Analysis Cycle...");
         try {
-            // 1. Load historical state
+            // 1. Load historical state (The Cache)
             Map<String, MarketMetric> persistedState = calendarRepo.findAll().stream()
                     .collect(Collectors.toMap(
                             CalendarEventEntity::getMetricName,
                             e -> new MarketMetric(e.getMetricName(), e.getActualValue(), e.getEstimateValue(), 0, e.getCategory())
                     ));
 
-// 2. Fetch live data with trace logging
-            System.out.println("[SYSTEM] Fetching FRED data...");
-            List<MarketMetric> rawFredMetrics = new ArrayList<>();
-            try {
-                rawFredMetrics = fredService.fetchMacroData();
-                Thread.sleep(1000);
-            } catch (Exception e) { System.err.println("[API Error] FRED: " + e.getMessage()); }
-
+            // 2. Fetch live data
             System.out.println("[SYSTEM] Fetching CFTC data...");
             List<MarketMetric> institutionalMetrics = new ArrayList<>();
             try {
@@ -81,7 +70,7 @@ public class EngineScheduler {
             } catch (Exception e) { System.err.println("[API Error] CFTC: " + e.getMessage()); }
 
             System.out.println("[SYSTEM] Fetching Technicals...");
-            TechnicalService.TechnicalData techData = new TechnicalService.TechnicalData(0.0, 0.0, 0.0);
+            TechnicalService.TechnicalData techData = new TechnicalService.TechnicalData(0.0, 0.0, 0.0, 0.0, 0.0);
             try {
                 techData = technicalService.fetchUsdTechnicals();
                 Thread.sleep(1000);
@@ -93,38 +82,31 @@ public class EngineScheduler {
                 liveCalendarEvents = calendarService.fetchLiveCalendarEvents();
             } catch (Exception e) { System.err.println("[API Error] Calendar: " + e.getMessage()); }
 
-            // 3. Upsert live calendar prints
+            // 3. Upsert live calendar prints (Updates the cache with this week's data)
             for (MarketMetric event : liveCalendarEvents) {
                 calendarRepo.save(new CalendarEventEntity(event.name(), event.actualValue(), event.forecastValue(), event.category()));
                 persistedState.put(event.name(), event);
             }
 
-            // 4. Merge FRED spot actuals with persisted estimates
-            List<MarketMetric> combinedMetrics = new ArrayList<>();
-            List<String> processedNames = new ArrayList<>();
-
-            for (MarketMetric fred : rawFredMetrics) {
-                double estimate = persistedState.containsKey(fred.name()) ? persistedState.get(fred.name()).forecastValue() : fred.forecastValue();
-                combinedMetrics.add(new MarketMetric(fred.name(), fred.actualValue(), estimate, 0, fred.category()));
-                processedNames.add(fred.name());
-            }
-
-            for (MarketMetric persisted : persistedState.values()) {
-                if (!processedNames.contains(persisted.name())) {
-                    combinedMetrics.add(persisted);
-                    processedNames.add(persisted.name());
-                }
-            }
-
+            // 4. Combine all metrics
+            List<MarketMetric> combinedMetrics = new ArrayList<>(persistedState.values());
             combinedMetrics.addAll(institutionalMetrics);
 
             // 5. Score engine pass
             List<MarketMetric> scoredMetrics = new ArrayList<>(engine.applyScores(combinedMetrics));
 
-            // Only score technicals if the API call was successful
+            // Only score technicals and yields if the API call was successful
             if (techData.currentPrice() > 0) {
                 int techScore = engine.scoreTechnicals(techData.currentPrice(), techData.sma200(), techData.rsi14());
                 scoredMetrics.add(new MarketMetric("Technical Momentum", techData.currentPrice(), 0.0, techScore, MetricCategory.TECHNICALS));
+
+                // Inject the bond yields (Forecast is 0.0 since we use absolute thresholds for bonds)
+                scoredMetrics.add(new MarketMetric("2Y Yield Momentum", techData.yield2Y(), 0.0, 0, MetricCategory.CAPITAL_FLOWS));
+                scoredMetrics.add(new MarketMetric("10Y Real Yield", techData.yield10Y(), 0.0, 0, MetricCategory.CAPITAL_FLOWS));
+
+                // Calculate the yield curve (10Y - 2Y)
+                double yieldCurve = techData.yield10Y() - techData.yield2Y();
+                scoredMetrics.add(new MarketMetric("2s10s Yield Curve", yieldCurve, 0.0, 0, MetricCategory.CAPITAL_FLOWS));
             }
 
             int totalScore = engine.calculateTotalScore(scoredMetrics);

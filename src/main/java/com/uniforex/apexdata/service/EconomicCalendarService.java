@@ -97,14 +97,23 @@ public class EconomicCalendarService {
             val = val.replace("%", "");
         } else if (val.endsWith("K")) {
             val = val.replace("K", "");
+            multiplier = 1000.0;
         } else if (val.endsWith("M")) {
             val = val.replace("M", "");
+            multiplier = 1000000.0;
         } else if (val.endsWith("B")) {
             val = val.replace("B", "");
+            multiplier = 1000000000.0;
         }
 
         try {
-            return Double.parseDouble(val) * multiplier;
+            double parsed = Double.parseDouble(val);
+
+            // Note: For NFP, your CompositeScoringEngine checks "if (nfpChange > 150.0)"
+            // If you want 150K to be treated as 150.0 in the engine, leave multiplier as 1.0 for "K".
+            // If your engine expects the raw number (150000), keep the multipliers above.
+
+            return parsed * multiplier;
         } catch (NumberFormatException e) {
             return 0.0;
         }
