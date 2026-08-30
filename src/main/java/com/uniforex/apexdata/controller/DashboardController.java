@@ -4,6 +4,7 @@ import com.uniforex.apexdata.model.dto.DashboardSummaryResponse;
 import com.uniforex.apexdata.model.entity.HistoricalScoreEntity;
 import com.uniforex.apexdata.repository.HistoricalScoreRepository;
 import com.uniforex.apexdata.service.DashboardStateService;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,15 +25,18 @@ public class DashboardController {
         this.stateService = stateService;
     }
 
-    // Returns the fully calculated dashboard, ready for React to render
     @GetMapping("/summary")
-    public DashboardSummaryResponse getDashboardSummary() {
-        return stateService.getLatestSummary();
+    public ResponseEntity<DashboardSummaryResponse> getDashboardSummary() {
+        DashboardSummaryResponse summary = stateService.getLatestSummary();
+        if (summary == null) {
+            // Returns a 503 Service Unavailable instead of crashing, giving the engine time to run
+            return ResponseEntity.status(503).build();
+        }
+        return ResponseEntity.ok(summary);
     }
 
-    // Returns the historical ledger for the React line chart
     @GetMapping("/history")
-    public List<HistoricalScoreEntity> getHistoricalScores() {
-        return historyRepo.findAll();
+    public ResponseEntity<List<HistoricalScoreEntity>> getHistoricalScores() {
+        return ResponseEntity.ok(historyRepo.findAll());
     }
 }
