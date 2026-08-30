@@ -4,6 +4,7 @@ import com.uniforex.apexdata.model.dto.DashboardSummaryResponse;
 import com.uniforex.apexdata.model.entity.HistoricalScoreEntity;
 import com.uniforex.apexdata.repository.HistoricalScoreRepository;
 import com.uniforex.apexdata.service.DashboardStateService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,17 +27,28 @@ public class DashboardController {
     }
 
     @GetMapping("/summary")
-    public ResponseEntity<DashboardSummaryResponse> getDashboardSummary() {
-        DashboardSummaryResponse summary = stateService.getLatestSummary();
-        if (summary == null) {
-            // Returns a 503 Service Unavailable instead of crashing, giving the engine time to run
-            return ResponseEntity.status(503).build();
+    public ResponseEntity<?> getDashboardSummary() {
+        try {
+            DashboardSummaryResponse summary = stateService.getLatestSummary();
+            if (summary == null) {
+                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Engine has not completed first cycle yet.");
+            }
+            return ResponseEntity.ok(summary);
+        } catch (Exception e) {
+            System.err.println("[CRITICAL ERROR] Failed to fetch summary:");
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error: " + e.getMessage());
         }
-        return ResponseEntity.ok(summary);
     }
 
     @GetMapping("/history")
-    public ResponseEntity<List<HistoricalScoreEntity>> getHistoricalScores() {
-        return ResponseEntity.ok(historyRepo.findAll());
+    public ResponseEntity<?> getHistoricalScores() {
+        try {
+            return ResponseEntity.ok(historyRepo.findAll());
+        } catch (Exception e) {
+            System.err.println("[CRITICAL ERROR] Failed to fetch history:");
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error: " + e.getMessage());
+        }
     }
 }
