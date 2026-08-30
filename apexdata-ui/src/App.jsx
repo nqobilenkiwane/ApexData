@@ -8,9 +8,11 @@ function App() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Vite uses import.meta.env. Create React App uses process.env
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://apexdata-production-dc24.up.railway.app';
     Promise.all([
-      fetch('http://localhost:8080/api/v1/dashboard/summary').then(res => res.json()),
-      fetch('http://localhost:8080/api/v1/dashboard/history').then(res => res.json())
+        fetch('https://apexdata-production-dc24.up.railway.app/api/v1/dashboard/summary').then(res => res.json()),
+        fetch('https://apexdata-production-dc24.up.railway.app/api/v1/dashboard/history').then(res => res.json())
     ])
       .then(([summaryData, historyData]) => {
         setSummary(summaryData)
