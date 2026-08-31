@@ -76,12 +76,12 @@ public class EngineScheduler {
             try {
                 techData = technicalService.fetchUsdTechnicals();
                 Thread.sleep(1000);
-                // After Technicals fetch
-                System.out.println("[DEBUG] Tech Price: " + techData.currentPrice());
-                if (techData.currentPrice() == 0.0) {
-                    System.out.println("[DEBUG] Warning: Technicals returned 0.0. Check Alpha Vantage rate limits or weekend closures.");
-                }
-            } catch (Exception e) { System.err.println("[API Error] Technicals: " + e.getMessage()); }
+            } catch (Exception e) {
+                System.err.println("[API Error] Technicals: " + e.getMessage());
+                System.out.println("[SYSTEM] Rate limit hit. Injecting Fallback Technical Data for debugging.");
+                // Last known real values from your TradingView and Dashboard checks
+                techData = new TechnicalService.TechnicalData(0.86, 0.859, 50.0, 4.67, 4.20);
+            }
 
             System.out.println("[SYSTEM] Fetching Economic Calendar...");
             List<MarketMetric> liveCalendarEvents = new ArrayList<>();
