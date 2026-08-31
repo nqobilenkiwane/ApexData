@@ -80,7 +80,7 @@ public class EngineScheduler {
                 System.err.println("[API Error] Technicals: " + e.getMessage());
                 System.out.println("[SYSTEM] Rate limit hit. Injecting Fallback Technical Data for debugging.");
                 // Last known real values from your TradingView and Dashboard checks
-                techData = new TechnicalService.TechnicalData(0.86, 0.859, 50.0, 4.67, 4.20);
+                techData = new TechnicalService.TechnicalData(0.86, 0.859, 50.0, 4.34, 4.75);
             }
 
             System.out.println("[SYSTEM] Fetching Economic Calendar...");
