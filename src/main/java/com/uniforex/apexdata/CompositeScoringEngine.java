@@ -50,17 +50,17 @@ public class CompositeScoringEngine {
                         // If no estimate is available, high inflation is broadly Hawkish/Bullish
                         score = m.actualValue() > 2.0 ? 1 : -1;
                         break;
-//                    case "COT Net Positioning":
-//                        score = m.actualValue() > 0 ? 1 : (m.actualValue() < 0 ? -1 : 0);
-//                        break;
-//                    case "COT Long Percentage":
-//                        double pct = m.actualValue();
-//                        if (pct >= 80) score = -1;       // Bearish (Overcrowded Longs)
-//                        else if (pct <= 20) score = 1;   // Bullish (Short Squeeze)
-//                        else if (pct >= 55) score = 1;   // Bullish (Healthy Trend)
-//                        else if (pct <= 45) score = -1;  // Bearish (Healthy Short)
-//                        else score = 0;                  // Neutral
-//                        break;
+                    case "COT Net Positioning":
+                        score = m.actualValue() > 0 ? 1 : (m.actualValue() < 0 ? -1 : 0);
+                        break;
+                    case "COT Long Percentage":
+                        double pct = m.actualValue();
+                        if (pct >= 80) score = -1;       // Bearish (Overcrowded Longs)
+                        else if (pct <= 20) score = 1;   // Bullish (Short Squeeze)
+                        else if (pct >= 55) score = 1;   // Bullish (Healthy Trend)
+                        else if (pct <= 45) score = -1;  // Bearish (Healthy Short)
+                        else score = 0;                  // Neutral
+                        break;
                     default:
                         score = 0;
                 }
