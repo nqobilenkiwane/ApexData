@@ -25,7 +25,7 @@ public class EconomicCalendarService {
     public List<MarketMetric> fetchLiveCalendarEvents() throws Exception {
 
         // 1. Fetch the live, public JSON calendar feed from Forex Factory
-        String endpoint = "https://nfs.faireconomy.media/ff_calendar_thismonth.json";
+        String endpoint = "https://nfs.faireconomy.media/ff_calendar_thisweek.json";
         String jsonResponse = client.fetchRawJson(endpoint);
 
         // Map it to a generic list of maps since the Forex Factory structure is flat
