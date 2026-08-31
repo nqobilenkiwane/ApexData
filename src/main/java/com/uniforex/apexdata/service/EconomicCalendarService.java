@@ -25,7 +25,7 @@ public class EconomicCalendarService {
     public List<MarketMetric> fetchLiveCalendarEvents() throws Exception {
 
         // 1. Fetch the live, public JSON calendar feed from Forex Factory
-        String endpoint = "https://nfs.faireconomy.media/ff_calendar_thisweek.json";
+        String endpoint = "https://nfs.faireconomy.media/ff_calendar_thismonth.json";
         String jsonResponse = client.fetchRawJson(endpoint);
 
         // Map it to a generic list of maps since the Forex Factory structure is flat
@@ -90,30 +90,10 @@ public class EconomicCalendarService {
 
     // Helper method to strip strings (e.g. "4.1%", "85K", "-0.1M") into pure doubles
     private double parseValue(String val) {
-        val = val.replaceAll(",", "").trim();
-        double multiplier = 1.0;
-
-        if (val.endsWith("%")) {
-            val = val.replace("%", "");
-        } else if (val.endsWith("K")) {
-            val = val.replace("K", "");
-            multiplier = 1000.0;
-        } else if (val.endsWith("M")) {
-            val = val.replace("M", "");
-            multiplier = 1000000.0;
-        } else if (val.endsWith("B")) {
-            val = val.replace("B", "");
-            multiplier = 1000000000.0;
-        }
+        val = val.replaceAll("[,%KMB]", "").trim();
 
         try {
-            double parsed = Double.parseDouble(val);
-
-            // Note: For NFP, your CompositeScoringEngine checks "if (nfpChange > 150.0)"
-            // If you want 150K to be treated as 150.0 in the engine, leave multiplier as 1.0 for "K".
-            // If your engine expects the raw number (150000), keep the multipliers above.
-
-            return parsed * multiplier;
+            return Double.parseDouble(val);
         } catch (NumberFormatException e) {
             return 0.0;
         }
