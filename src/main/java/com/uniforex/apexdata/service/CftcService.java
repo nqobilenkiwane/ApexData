@@ -13,12 +13,26 @@ import java.net.http.HttpResponse;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * Service responsible for fetching and analyzing institutional market positioning data
+ * from the Commodity Futures Trading Commission (CFTC).
+ * <p>
+ * This class specifically targets the U.S. Dollar Index (Contract Code: 098662) to track
+ * "smart money" sentiment by extracting the positions of non-commercial speculators
+ * (e.g., hedge funds, CTAs) who drive overarching market momentum.
+ */
 public class CftcService {
 
     private final MarketDataClient client;
     private final ObjectMapper mapper;
     private final HttpClient httpClient;
 
+    /**
+     * Initializes the CFTC service with necessary network dependencies.
+     *
+     * @param client Internal standard market data client.
+     * @param mapper Jackson object mapper for parsing raw JSON payloads.
+     */
     public CftcService(MarketDataClient client, ObjectMapper mapper) {
         this.client = client;
         this.mapper = mapper;
@@ -26,6 +40,24 @@ public class CftcService {
         this.httpClient = HttpClient.newHttpClient();
     }
 
+    /**
+     * Fetches the latest two weeks of Commitments of Traders (COT) data for the USD Index
+     * to evaluate institutional market bias, momentum, and trade crowdedness.
+     * <p>
+     * <b>Metric Methodology:</b>
+     * <ul>
+     *   <li><b>Net Positioning:</b> Calculated as (Longs - Shorts). Dictates the absolute directional
+     *       bias of institutional capital (Bullish vs. Bearish).</li>
+     *   <li><b>WoW Delta (Momentum):</b> Compares current net positioning to the previous week's net.
+     *       Tracks velocity to see if institutions are aggressively adding to or unwinding their bets.</li>
+     *   <li><b>Long Percentage (Sentiment Extreme):</b> Calculated as (Longs / (Longs + Shorts)).
+     *       Highlights extreme sentiment. If a trade becomes too heavily skewed (e.g., >80% Long),
+     *       it becomes vulnerable to sharp contrarian reversals.</li>
+     * </ul>
+     *
+     * @return A list of initialized {@link MarketMetric} objects representing Institutional Activity.
+     * @throws Exception if the CFTC Socrata endpoint fails or returns an empty/malformed dataset.
+     */
     public List<MarketMetric> fetchInstitutionalData() throws Exception {
         // CFTC API: U.S. Dollar Index (098662). Ordered by date DESC, limited to 2 to get WoW data.
         String url = "https://publicreporting.cftc.gov/resource/6dca-aqww.json?cftc_contract_market_code=098662&$order=report_date_as_yyyy_mm_dd%20DESC&$limit=2";

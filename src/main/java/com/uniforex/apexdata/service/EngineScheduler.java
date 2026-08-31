@@ -109,13 +109,18 @@ public class EngineScheduler {
                 int techScore = engine.scoreTechnicals(techData.currentPrice(), techData.sma200(), techData.rsi14());
                 scoredMetrics.add(new MarketMetric("Technical Momentum", techData.currentPrice(), 0.0, techScore, MetricCategory.TECHNICALS));
 
-                // Inject the bond yields (Forecast is 0.0 since we use absolute thresholds for bonds)
-                scoredMetrics.add(new MarketMetric("2Y Yield Momentum", techData.yield2Y(), 0.0, 0, MetricCategory.CAPITAL_FLOWS));
-                scoredMetrics.add(new MarketMetric("10Y Real Yield", techData.yield10Y(), 0.0, 0, MetricCategory.CAPITAL_FLOWS));
+                // Inject the bond yields using absolute macro thresholds
+                int score10Y = engine.scoreAbsoluteYield(techData.yield10Y(), 4.00);
+                int score2Y = engine.scoreAbsoluteYield(techData.yield2Y(), 4.50);
 
-                // Calculate the yield curve (10Y - 2Y)
+                scoredMetrics.add(new MarketMetric("2Y Yield Momentum", techData.yield2Y(), 0.0, score2Y, MetricCategory.CAPITAL_FLOWS));
+                scoredMetrics.add(new MarketMetric("10Y Real Yield", techData.yield10Y(), 0.0, score10Y, MetricCategory.CAPITAL_FLOWS));
+
+                // Calculate and score the yield curve (10Y - 2Y)
                 double yieldCurve = techData.yield10Y() - techData.yield2Y();
-                scoredMetrics.add(new MarketMetric("2s10s Yield Curve", yieldCurve, 0.0, 0, MetricCategory.CAPITAL_FLOWS));
+                int curveScore = engine.scoreYieldCurve(yieldCurve);
+
+                scoredMetrics.add(new MarketMetric("2s10s Yield Curve", yieldCurve, 0.0, curveScore, MetricCategory.CAPITAL_FLOWS));
             }
 
             int totalScore = engine.calculateTotalScore(scoredMetrics);
