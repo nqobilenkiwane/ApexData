@@ -30,6 +30,12 @@ public class EconomicCalendarService {
 
         for (Map<String, String> e : events) {
             String country = e.get("country");
+
+            // ADD THIS DIAGNOSTIC LOG:
+            if ("USD".equalsIgnoreCase(country)) {
+                System.out.println("[DEBUG] FF Feed -> Title: " + e.get("title") + " | Act: " + e.get("actual") + " | Est: " + e.get("forecast"));
+            }
+
             if (!"USD".equalsIgnoreCase(country)) {
                 continue;
             }
