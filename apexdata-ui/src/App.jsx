@@ -76,6 +76,16 @@ useEffect(() => {
     return null;
   };
 
+  // Define this right above your return statement
+  const CATEGORY_ORDER = [
+      'ECONOMIC_GROWTH',
+      'JOB_MARKET',
+      'INFLATION',
+      'INSTITUTIONAL_ACTIVITY',
+      'CAPITAL_FLOWS',
+      'TECHNICALS'
+  ];
+
   return (
     <div style={styles.container}>
       <header style={styles.header}>
@@ -130,42 +140,50 @@ useEffect(() => {
         </div>
       )}
 
-      {/* 4. METRICS GRID */}
-      <div style={styles.grid}>
-        {Object.entries(summary.categoryScores).map(([category, catScore]) => (
-          <div key={category} style={styles.card}>
-            <div style={styles.cardHeader}>
-              <h2 style={styles.cardTitle}>{formatCategory(category)}</h2>
-              <span style={{...styles.catScoreBadge, color: getMetricScoreColor(catScore)}}>
-                {catScore > 0 ? '+' : ''}{catScore}
-              </span>
-            </div>
+        {/* 4. METRICS GRID */}
+        <div style={styles.grid}>
+          {CATEGORY_ORDER.map((category) => {
+            // Grab the score for this specific category from the backend summary
+            const catScore = summary.categoryScores[category];
 
-            <div style={styles.metricList}>
-              {summary.metrics
-                .filter(m => m.category === category)
-                .map(metric => (
-                  <div key={metric.name} style={styles.metricRow}>
-                    <div style={styles.metricName}>{metric.name}</div>
-                    <div style={styles.metricValues}>
-                      <span style={styles.actual}>
-                        Act: {Number(metric.actualValue).toFixed(2)}
-                      </span>
-                      {metric.forecastValue !== 0 && (
-                        <span style={styles.estimate}>
-                          Est: {Number(metric.forecastValue).toFixed(2)}
-                        </span>
-                      )}
-                    </div>
-                    <div style={{...styles.metricScore, color: getMetricScoreColor(metric.scoreDelta)}}>
-                      {metric.scoreDelta > 0 ? '+' : ''}{metric.scoreDelta}
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </div>
-        ))}
-      </div>
+            // If the backend hasn't returned this category yet, skip rendering the card
+            if (catScore === undefined) return null;
+
+            return (
+              <div key={category} style={styles.card}>
+                <div style={styles.cardHeader}>
+                  <h2 style={styles.cardTitle}>{formatCategory(category)}</h2>
+                  <span style={{...styles.catScoreBadge, color: getMetricScoreColor(catScore)}}>
+                    {catScore > 0 ? '+' : ''}{catScore}
+                  </span>
+                </div>
+
+                <div style={styles.metricList}>
+                  {summary.metrics
+                    .filter(m => m.category === category)
+                    .map(metric => (
+                      <div key={metric.name} style={styles.metricRow}>
+                        <div style={styles.metricName}>{metric.name}</div>
+                        <div style={styles.metricValues}>
+                          <span style={styles.actual}>
+                            Act: {Number(metric.actualValue).toFixed(2)}
+                          </span>
+                          {metric.forecastValue !== 0 && (
+                            <span style={styles.estimate}>
+                              Est: {Number(metric.forecastValue).toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{...styles.metricScore, color: getMetricScoreColor(metric.scoreDelta)}}>
+                          {metric.scoreDelta > 0 ? '+' : ''}{metric.scoreDelta}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
     </div>
   )
 }
