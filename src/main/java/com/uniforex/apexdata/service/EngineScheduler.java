@@ -13,6 +13,8 @@ import com.uniforex.apexdata.repository.HistoricalScoreRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -52,6 +54,17 @@ public class EngineScheduler {
         this.cftcService = new CftcService(client, mapper);
         this.technicalService = new TechnicalService(client, mapper, alphaApiKey);
         this.calendarService = new EconomicCalendarService(client, mapper, null);
+    }
+
+    @EventListener(ApplicationReadyEvent.class)
+    public void primeStateOnStartup() {
+        System.out.println("\n[SYSTEM] Application Started. Priming dashboard state from database...");
+        try {
+            // Immediately load the existing DB data and generate a score so the UI has something to render
+            rebuildAndScoreState();
+        } catch (Exception e) {
+            System.err.println("[SYSTEM] Failed to prime state on startup: " + e.getMessage());
+        }
     }
 
     // 1. FAST CYCLE: Runs at the top of every hour to catch live news drops
