@@ -1,14 +1,14 @@
 package com.uniforex.apexdata.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.uniforex.apexdata.MarketDataClient;
 import com.uniforex.apexdata.model.MarketMetric;
 import com.uniforex.apexdata.model.MetricCategory;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 
-import java.time.DayOfWeek;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -16,106 +16,105 @@ import java.util.Map;
 
 public class EconomicCalendarService {
 
-    private final MarketDataClient client;
-    private final ObjectMapper mapper;
-    private final String fmpApiKey;
-
     public EconomicCalendarService(MarketDataClient client, ObjectMapper mapper, String apiKey) {
-        this.client = client;
-        this.mapper = mapper;
-        // Inject your FMP Key here. If passed from EngineScheduler, update the constructor there.
-        this.fmpApiKey = "Zbp00DnAZP6aZILfRCRAOpz7eeZ1Mvnj";
+        // Dependencies maintained for constructor compatibility
     }
 
     public List<MarketMetric> fetchLiveCalendarEvents() throws Exception {
-        // 1. Calculate the current week's Monday and Friday for the API parameters
-        LocalDate today = LocalDate.now();
-        LocalDate monday = today.with(DayOfWeek.MONDAY);
-        LocalDate friday = today.with(DayOfWeek.FRIDAY);
-
-        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-        String fromDate = monday.format(dtf);
-        String toDate = friday.format(dtf);
-
-        // 2. Call the FMP Economic Calendar Endpoint
-        String endpoint = String.format(
-                "https://financialmodelingprep.com/api/v3/economic_calendar?from=%s&to=%s&apikey=%s",
-                fromDate, toDate, fmpApiKey
-        );
-
-        String jsonResponse = client.fetchRawJson(endpoint);
-
-        List<Map<String, Object>> events = mapper.readValue(jsonResponse, new TypeReference<List<Map<String, Object>>>() {});
         Map<String, MarketMetric> uniqueMetrics = new HashMap<>();
 
-        for (Map<String, Object> e : events) {
-            String country = (String) e.get("country");
-            if (!"US".equalsIgnoreCase(country)) {
+        // Fetch live calendar HTML mimicking a standard browser
+        Document doc = Jsoup.connect("https://www.forexfactory.com/calendar")
+                .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                .timeout(10000)
+                .get();
+
+        Elements rows = doc.select("tr.calendar__row");
+
+        for (Element row : rows) {
+            Element currencyElem = row.selectFirst("td.calendar__currency");
+            if (currencyElem == null || !"USD".equalsIgnoreCase(currencyElem.text().trim())) {
                 continue;
             }
 
-            // FMP returns actual and estimate as numbers, not strings
-            Object actualObj = e.get("actual");
-            Object estimateObj = e.get("estimate");
+            Element eventElem = row.selectFirst("td.calendar__event span");
+            Element actualElem = row.selectFirst("td.calendar__actual");
+            Element forecastElem = row.selectFirst("td.calendar__forecast");
 
-            if (actualObj == null || estimateObj == null) {
-                continue; // Skip if the event hasn't happened or lacks a forecast
+            if (eventElem == null || actualElem == null || forecastElem == null) {
+                continue;
             }
 
-            double actual = Double.parseDouble(actualObj.toString());
-            double estimate = Double.parseDouble(estimateObj.toString());
+            String eventTitle = eventElem.text().trim().toLowerCase();
+            String actualText = actualElem.text().trim();
+            String forecastText = forecastElem.text().trim();
 
-            String eventName = ((String) e.get("event")).toLowerCase();
+            // Skip if the actual number hasn't printed yet or there was no forecast
+            if (actualText.isEmpty() || forecastText.isEmpty()) {
+                continue;
+            }
 
-            // 3. Map FMP titles to ApexData Engine metrics
-            if (eventName.contains("non farm payrolls") || eventName.contains("nonfarm payrolls")) {
+            double actual = parseValue(actualText);
+            double estimate = parseValue(forecastText);
+
+            if (eventTitle.contains("non-farm employment") || eventTitle.contains("nfp")) {
                 uniqueMetrics.put("NFP (Jobs)", new MarketMetric("NFP (Jobs)", actual, estimate, 0, MetricCategory.JOB_MARKET));
-            } else if (eventName.contains("unemployment rate")) {
+            } else if (eventTitle.contains("unemployment rate")) {
                 uniqueMetrics.put("Unemployment Rate", new MarketMetric("Unemployment Rate", actual, estimate, 0, MetricCategory.JOB_MARKET));
-            } else if (eventName.contains("retail sales mom")) {
+            } else if (eventTitle.contains("retail sales") || eventTitle.contains("core retail sales")) {
                 uniqueMetrics.put("Retail Sales (MoM)", new MarketMetric("Retail Sales (MoM)", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
-            } else if (eventName.contains("initial jobless claims")) {
+            } else if (eventTitle.contains("unemployment claims")) {
                 uniqueMetrics.put("Initial Jobless Claims", new MarketMetric("Initial Jobless Claims", actual, estimate, 0, MetricCategory.JOB_MARKET));
-            } else if (eventName.contains("ppi mom") || eventName.contains("producer price index")) {
+            } else if (eventTitle.contains("ppi") || eventTitle.contains("core ppi")) {
                 uniqueMetrics.put("PPI (MoM)", new MarketMetric("PPI (MoM)", actual, estimate, 0, MetricCategory.INFLATION));
-            } else if (eventName.contains("average hourly earnings")) {
+            } else if (eventTitle.contains("average hourly earnings")) {
                 uniqueMetrics.put("Wage Growth (MoM)", new MarketMetric("Wage Growth (MoM)", actual, estimate, 0, MetricCategory.INFLATION));
-            } else if (eventName.contains("core pce price index")) {
+            } else if (eventTitle.contains("core pce")) {
                 uniqueMetrics.put("Core PCE (MoM)", new MarketMetric("Core PCE (MoM)", actual, estimate, 0, MetricCategory.INFLATION));
-            } else if (eventName.contains("industrial production mom")) {
+            } else if (eventTitle.contains("industrial production")) {
                 uniqueMetrics.put("Industrial Production", new MarketMetric("Industrial Production", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
-            } else if (eventName.contains("cb consumer confidence") || eventName.contains("michigan consumer sentiment")) {
+            } else if (eventTitle.contains("consumer sentiment") || eventTitle.contains("consumer confidence")) {
                 uniqueMetrics.put("Consumer Sentiment", new MarketMetric("Consumer Sentiment", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
-            } else if (eventName.contains("ism manufacturing pmi")) {
+            } else if (eventTitle.contains("manufacturing pmi")) {
                 uniqueMetrics.put("Manufacturing PMI", new MarketMetric("Manufacturing PMI", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
-            } else if (eventName.contains("ism non-manufacturing pmi") || eventName.contains("ism services pmi")) {
+            } else if (eventTitle.contains("services pmi")) {
                 uniqueMetrics.put("Services PMI", new MarketMetric("Services PMI", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
-            } else if (eventName.contains("jolts job openings")) {
+            } else if (eventTitle.contains("jolts job openings")) {
                 uniqueMetrics.put("JOLTS Job Openings", new MarketMetric("JOLTS Job Openings", actual, estimate, 0, MetricCategory.JOB_MARKET));
-            } else if (eventName.contains("adp employment change")) {
+            } else if (eventTitle.contains("adp non-farm")) {
                 uniqueMetrics.put("ADP Private Employment", new MarketMetric("ADP Private Employment", actual, estimate, 0, MetricCategory.JOB_MARKET));
-            } else if (eventName.contains("inflation rate yoy")) {
+            } else if (eventTitle.contains("cpi")) {
                 uniqueMetrics.put("YoY Inflation", new MarketMetric("YoY Inflation", actual, estimate, 0, MetricCategory.INFLATION));
-            } else if (eventName.contains("gdp growth rate")) {
+            } else if (eventTitle.contains("gdp")) {
                 uniqueMetrics.put("Real GDP", new MarketMetric("Real GDP", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
             }
         }
+
         return new ArrayList<>(uniqueMetrics.values());
     }
 
     private double parseValue(String val) {
-        // 1. Strip hidden HTML tags (e.g., <span class="better">54.6</span>)
-        val = val.replaceAll("<[^>]*>", "");
-        // 2. Strip standard financial characters
-        val = val.replaceAll("[,%KMB]", "").trim();
+        // Strip HTML tags and commas/percentages
+        val = val.replaceAll("<[^>]*>", "").replaceAll("[,%]", "").trim();
+
+        double multiplier = 1.0;
+        String lowerVal = val.toLowerCase();
+
+        if (lowerVal.endsWith("k")) {
+            multiplier = 1000.0;
+            val = lowerVal.replace("k", "");
+        } else if (lowerVal.endsWith("m")) {
+            multiplier = 1000000.0;
+            val = lowerVal.replace("m", "");
+        } else if (lowerVal.endsWith("b")) {
+            multiplier = 1000000000.0;
+            val = lowerVal.replace("b", "");
+        }
 
         try {
-            return Double.parseDouble(val);
+            return Double.parseDouble(val.trim()) * multiplier;
         } catch (NumberFormatException e) {
-            System.err.println("[WARNING] Failed to parse value: " + val);
             return 0.0;
         }
     }
 }
-
-
