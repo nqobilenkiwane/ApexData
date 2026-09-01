@@ -6,6 +6,9 @@ import com.uniforex.apexdata.MarketDataClient;
 import com.uniforex.apexdata.model.MarketMetric;
 import com.uniforex.apexdata.model.MetricCategory;
 
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -15,73 +18,85 @@ public class EconomicCalendarService {
 
     private final MarketDataClient client;
     private final ObjectMapper mapper;
+    private final String fmpApiKey;
 
     public EconomicCalendarService(MarketDataClient client, ObjectMapper mapper, String apiKey) {
         this.client = client;
         this.mapper = mapper;
+        // Inject your FMP Key here. If passed from EngineScheduler, update the constructor there.
+        this.fmpApiKey = "Zbp00DnAZP6aZILfRCRAOpz7eeZ1Mvnj";
     }
 
     public List<MarketMetric> fetchLiveCalendarEvents() throws Exception {
-        String endpoint = "https://nfs.faireconomy.media/ff_calendar_thisweek.json";
+        // 1. Calculate the current week's Monday and Friday for the API parameters
+        LocalDate today = LocalDate.now();
+        LocalDate monday = today.with(DayOfWeek.MONDAY);
+        LocalDate friday = today.with(DayOfWeek.FRIDAY);
+
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        String fromDate = monday.format(dtf);
+        String toDate = friday.format(dtf);
+
+        // 2. Call the FMP Economic Calendar Endpoint
+        String endpoint = String.format(
+                "https://financialmodelingprep.com/api/v3/economic_calendar?from=%s&to=%s&apikey=%s",
+                fromDate, toDate, fmpApiKey
+        );
+
         String jsonResponse = client.fetchRawJson(endpoint);
 
-        List<Map<String, String>> events = mapper.readValue(jsonResponse, new TypeReference<List<Map<String, String>>>() {});
+        List<Map<String, Object>> events = mapper.readValue(jsonResponse, new TypeReference<List<Map<String, Object>>>() {});
         Map<String, MarketMetric> uniqueMetrics = new HashMap<>();
 
-        for (Map<String, String> e : events) {
-            String country = e.get("country");
-
-            // ADD THIS DIAGNOSTIC LOG:
-            if ("USD".equalsIgnoreCase(country)) {
-                System.out.println("[DEBUG] FF Feed -> Title: " + e.get("title") + " | Act: " + e.get("actual") + " | Est: " + e.get("forecast"));
-            }
-
-            if (!"USD".equalsIgnoreCase(country)) {
+        for (Map<String, Object> e : events) {
+            String country = (String) e.get("country");
+            if (!"US".equalsIgnoreCase(country)) {
                 continue;
             }
 
-            String actualStr = e.get("actual");
-            String forecastStr = e.get("forecast");
+            // FMP returns actual and estimate as numbers, not strings
+            Object actualObj = e.get("actual");
+            Object estimateObj = e.get("estimate");
 
-            if (actualStr == null || actualStr.isEmpty() || forecastStr == null || forecastStr.isEmpty()) {
-                continue;
+            if (actualObj == null || estimateObj == null) {
+                continue; // Skip if the event hasn't happened or lacks a forecast
             }
 
-            double actual = parseValue(actualStr);
-            double estimate = parseValue(forecastStr);
+            double actual = Double.parseDouble(actualObj.toString());
+            double estimate = Double.parseDouble(estimateObj.toString());
 
-            // Standardize string to lowercase for bulletproof matching
-            String eventName = e.get("title").toLowerCase();
+            String eventName = ((String) e.get("event")).toLowerCase();
 
-            if (eventName.contains("non-farm employment") || eventName.contains("nfp")) {
+            // 3. Map FMP titles to ApexData Engine metrics
+            if (eventName.contains("non farm payrolls") || eventName.contains("nonfarm payrolls")) {
                 uniqueMetrics.put("NFP (Jobs)", new MarketMetric("NFP (Jobs)", actual, estimate, 0, MetricCategory.JOB_MARKET));
             } else if (eventName.contains("unemployment rate")) {
                 uniqueMetrics.put("Unemployment Rate", new MarketMetric("Unemployment Rate", actual, estimate, 0, MetricCategory.JOB_MARKET));
-            } else if (eventName.contains("retail sales") || eventName.contains("core retail sales")) {
+            } else if (eventName.contains("retail sales mom")) {
                 uniqueMetrics.put("Retail Sales (MoM)", new MarketMetric("Retail Sales (MoM)", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
-            } else if (eventName.contains("jobless claims")) {
+            } else if (eventName.contains("initial jobless claims")) {
                 uniqueMetrics.put("Initial Jobless Claims", new MarketMetric("Initial Jobless Claims", actual, estimate, 0, MetricCategory.JOB_MARKET));
-            } else if (eventName.contains("ppi m/m") || eventName.contains("core ppi")) {
+            } else if (eventName.contains("ppi mom") || eventName.contains("producer price index")) {
                 uniqueMetrics.put("PPI (MoM)", new MarketMetric("PPI (MoM)", actual, estimate, 0, MetricCategory.INFLATION));
             } else if (eventName.contains("average hourly earnings")) {
                 uniqueMetrics.put("Wage Growth (MoM)", new MarketMetric("Wage Growth (MoM)", actual, estimate, 0, MetricCategory.INFLATION));
-            } else if (eventName.contains("core pce")) {
+            } else if (eventName.contains("core pce price index")) {
                 uniqueMetrics.put("Core PCE (MoM)", new MarketMetric("Core PCE (MoM)", actual, estimate, 0, MetricCategory.INFLATION));
-            } else if (eventName.contains("industrial production")) {
+            } else if (eventName.contains("industrial production mom")) {
                 uniqueMetrics.put("Industrial Production", new MarketMetric("Industrial Production", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
-            } else if (eventName.contains("consumer confidence") || eventName.contains("consumer sentiment")) {
+            } else if (eventName.contains("cb consumer confidence") || eventName.contains("michigan consumer sentiment")) {
                 uniqueMetrics.put("Consumer Sentiment", new MarketMetric("Consumer Sentiment", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
-            } else if (eventName.contains("manufacturing pmi")) {
+            } else if (eventName.contains("ism manufacturing pmi")) {
                 uniqueMetrics.put("Manufacturing PMI", new MarketMetric("Manufacturing PMI", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
-            } else if (eventName.contains("services pmi")) {
+            } else if (eventName.contains("ism non-manufacturing pmi") || eventName.contains("ism services pmi")) {
                 uniqueMetrics.put("Services PMI", new MarketMetric("Services PMI", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
             } else if (eventName.contains("jolts job openings")) {
                 uniqueMetrics.put("JOLTS Job Openings", new MarketMetric("JOLTS Job Openings", actual, estimate, 0, MetricCategory.JOB_MARKET));
-            } else if (eventName.contains("adp non-farm")) {
+            } else if (eventName.contains("adp employment change")) {
                 uniqueMetrics.put("ADP Private Employment", new MarketMetric("ADP Private Employment", actual, estimate, 0, MetricCategory.JOB_MARKET));
-            } else if (eventName.contains("cpi y/y") || eventName.contains("cpi m/m")) {
+            } else if (eventName.contains("inflation rate yoy")) {
                 uniqueMetrics.put("YoY Inflation", new MarketMetric("YoY Inflation", actual, estimate, 0, MetricCategory.INFLATION));
-            } else if (eventName.contains("advance gdp") || eventName.contains("real gdp")) {
+            } else if (eventName.contains("gdp growth rate")) {
                 uniqueMetrics.put("Real GDP", new MarketMetric("Real GDP", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
             }
         }
@@ -102,3 +117,5 @@ public class EconomicCalendarService {
         }
     }
 }
+
+
