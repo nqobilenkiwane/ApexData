@@ -71,6 +71,16 @@ public class EngineScheduler {
     @Scheduled(cron = "0 0 * * * *")
     public void executeCalendarCycle() {
         System.out.println("\n[SYSTEM] Executing Hourly Calendar Update...");
+
+        System.out.println("[SYSTEM] Fetching CFTC data...");
+        try {
+            cachedInstitutionalMetrics = cftcService.fetchInstitutionalData();
+            System.out.println("[DEBUG] CFTC Metrics Found: " + cachedInstitutionalMetrics.size());
+        } catch (Exception e) {
+            System.err.println("[API Error] CFTC: " + e.getMessage());
+        }
+
+        System.out.println("[SYSTEM] Fetching Calendar Events data...");
         try {
             List<MarketMetric> liveCalendarEvents = calendarService.fetchLiveCalendarEvents();
             System.out.println("[DEBUG] Calendar Events Found: " + liveCalendarEvents.size());
@@ -92,13 +102,13 @@ public class EngineScheduler {
     public void executeMacroCycle() {
         System.out.println("\n[SYSTEM] Executing 12-Hour Macro & Technicals...");
         try {
-            System.out.println("[SYSTEM] Fetching CFTC data...");
-            try {
-                cachedInstitutionalMetrics = cftcService.fetchInstitutionalData();
-                System.out.println("[DEBUG] CFTC Metrics Found: " + cachedInstitutionalMetrics.size());
-            } catch (Exception e) {
-                System.err.println("[API Error] CFTC: " + e.getMessage());
-            }
+//            System.out.println("[SYSTEM] Fetching CFTC data...");
+//            try {
+//                cachedInstitutionalMetrics = cftcService.fetchInstitutionalData();
+//                System.out.println("[DEBUG] CFTC Metrics Found: " + cachedInstitutionalMetrics.size());
+//            } catch (Exception e) {
+//                System.err.println("[API Error] CFTC: " + e.getMessage());
+//            }
 
             // 12-second buffer to guarantee we do not trip the 5 req/min rate limit
             Thread.sleep(12000);
