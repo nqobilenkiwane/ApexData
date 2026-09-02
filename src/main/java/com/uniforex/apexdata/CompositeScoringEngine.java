@@ -9,11 +9,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 public class CompositeScoringEngine {
-    // ANSI Escape Codes for Terminal Colors
-    private static final String ANSI_RESET = "\u001B[0m";
-    private static final String ANSI_RED = "\u001B[31m";
-    private static final String ANSI_GREEN = "\u001B[32m";
-    private static final String ANSI_GREY = "\u001B[90m";
 
     /**
      * Iterates through raw metrics, applies the existing mathematical logic,
@@ -76,28 +71,6 @@ public class CompositeScoringEngine {
         return scoredMetrics;
     }
 
-    public void printColoredMetricsToConsole(List<MarketMetric> scoredMetrics) {
-        System.out.println("\n[SYSTEM] Live Metric Evaluation:");
-
-        for (MarketMetric metric : scoredMetrics) {
-            String color = ANSI_GREY; // Default to neutral grey
-
-            if (metric.scoreDelta() == -1) {
-                color = ANSI_RED;
-            } else if (metric.scoreDelta() == 1) {
-                color = ANSI_GREEN;
-            }
-
-            // Formats output into neat columns: Metric Name | Colored Actual | Score
-            System.out.printf("%-25s Act: %s%8.2f%s    Score: %+d%n",
-                    metric.name(),
-                    color,
-                    metric.actualValue(),
-                    ANSI_RESET,
-                    metric.scoreDelta());
-        }
-        System.out.println();
-    }
     /**
      * Calculates the Surprise Factor (Actual - Forecast) and assigns a directional score.
      */

@@ -97,11 +97,19 @@ public class EngineScheduler {
         }
     }
 
-    // 2. SLOW CYCLE: Runs at 00:00 and 12:00 every day to respect API limits
+    // 2. SLOW CYCLE: Runs at 00:00 and 12:00 everyday to respect API limits
     @Scheduled(cron = "0 0 0,12 * * *")
     public void executeMacroCycle() {
         System.out.println("\n[SYSTEM] Executing 12-Hour Macro & Technicals...");
         try {
+//            System.out.println("[SYSTEM] Fetching CFTC data...");
+//            try {
+//                cachedInstitutionalMetrics = cftcService.fetchInstitutionalData();
+//                System.out.println("[DEBUG] CFTC Metrics Found: " + cachedInstitutionalMetrics.size());
+//            } catch (Exception e) {
+//                System.err.println("[API Error] CFTC: " + e.getMessage());
+//            }
+
             // 12-second buffer to guarantee we do not trip the 5 req/min rate limit
             Thread.sleep(12000);
 
@@ -169,9 +177,6 @@ public class EngineScheduler {
                 totalScore, overallBias, categoryScores, scoredMetrics
         );
         stateService.setLatestSummary(summary);
-
-        // 7. Output color-coded live evaluation to the console
-        engine.printColoredMetricsToConsole(scoredMetrics);
 
         System.out.printf("[SYSTEM] Dashboard State Rebuilt. USD Score (%+d / %s) saved to ledger.\n", totalScore, overallBias);
     }
