@@ -55,6 +55,12 @@ useEffect(() => {
     return '#888888';
   };
 
+  const getActualValueColor = (scoreDelta) => {
+        if (scoreDelta > 0) return '#00ff88';
+        if (scoreDelta < 0) return '#ff3366';
+        return '#FFFFFF'; // Keeps neutral 0 prints white for readability
+  };
+
   const formatCategory = (cat) => {
     return cat.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
   }
@@ -165,7 +171,7 @@ useEffect(() => {
                       <div key={metric.name} style={styles.metricRow}>
                         <div style={styles.metricName}>{metric.name}</div>
                         <div style={styles.metricValues}>
-                          <span style={styles.actual}>
+                          <span style={{ ...styles.actual, color: getActualValueColor(metric.scoreDelta) }}>
                             Act: {Number(metric.actualValue).toFixed(2)}
                           </span>
                           {metric.forecastValue !== 0 && (
