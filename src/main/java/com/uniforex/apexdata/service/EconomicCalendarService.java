@@ -22,43 +22,29 @@ public class EconomicCalendarService {
 
     public List<MarketMetric> fetchLiveCalendarEvents() throws Exception {
         Map<String, MarketMetric> uniqueMetrics = new HashMap<>();
-        Document doc = null;
 
-        // 1. Define the proxy pool array
-        String[] proxyPool = {
-                "https://api.allorigins.win/raw?url=https://www.forexfactory.com/calendar",
-                "https://api.codetabs.com/v1/proxy?quest=https://www.forexfactory.com/calendar",
-                "https://corsproxy.io/?https://www.forexfactory.com/calendar"
-        };
+        String scraperApiKey = "b7948d09ce26ef33bd811331e4bffbbc";
+        String targetUrl = "https://www.forexfactory.com/calendar";
+        String proxyUrl = "http://api.scraperapi.com?api_key=" + scraperApiKey + "&url=" + targetUrl;
 
-        // 2. Iterate through the proxies until one works
-        for (String proxyUrl : proxyPool) {
-            try {
-                System.out.println("[SYSTEM] Attempting calendar fetch via proxy: " + proxyUrl.split("/")[2]);
+        System.out.println("[SYSTEM] Attempting calendar fetch via ScraperAPI...");
 
-                doc = Jsoup.connect(proxyUrl)
-                        .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                        .header("Accept-Language", "en-US,en;q=0.9")
-                        .timeout(12000) // Strict 12-second timeout per attempt
-                        .ignoreContentType(true)
-                        .get();
+        // ScraperAPI handles proxy rotation internally, so we only need one connection attempt
+        Document doc = Jsoup.connect(proxyUrl)
+                .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                .header("Accept-Language", "en-US,en;q=0.9")
+                .timeout(60000) // 60-second timeout to give the residential proxy time to solve Cloudflare
+                .ignoreContentType(true)
+                .get();
 
-                // Break out of the loop if the HTML parsed successfully
-                if (doc != null && doc.selectFirst("tr.calendar__row") != null) {
-                    System.out.println("[SYSTEM] Successfully connected to proxy.");
-                    break;
-                }
-            } catch (Exception e) {
-                System.out.println("[WARNING] Proxy failed or timed out. Falling back to next proxy...");
-            }
-        }
-
-        // If all 3 failed, throw an exception so your scheduler catches it safely
+        // Throw an exception if the payload is empty so the scheduler handles it gracefully
         if (doc == null || doc.selectFirst("tr.calendar__row") == null) {
-            throw new Exception("All public proxies timed out or were blocked.");
+            throw new Exception("ScraperAPI failed to load the calendar or timed out.");
         }
 
-        // 3. Scrape the HTML payload
+        System.out.println("[SYSTEM] Successfully connected and retrieved HTML via ScraperAPI.");
+
+        // Scrape the HTML payload
         Elements rows = doc.select("tr.calendar__row");
 
         for (Element row : rows) {
@@ -122,7 +108,6 @@ public class EconomicCalendarService {
         return new ArrayList<>(uniqueMetrics.values());
     }
 
-    // Retained your multiplier logic to handle thousands (K), millions (M), and billions (B)
     private double parseValue(String val) {
         val = val.replaceAll("<[^>]*>", "").replaceAll("[,%]", "").trim();
         double multiplier = 1.0;

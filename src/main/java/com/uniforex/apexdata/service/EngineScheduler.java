@@ -68,7 +68,7 @@ public class EngineScheduler {
     }
 
     // 1. FAST CYCLE: Runs at the top of every hour to catch live news drops
-    @Scheduled(cron = "0 */15 * * * *")
+    @Scheduled(cron = "0 0 * * * *")
     public void executeCalendarCycle() {
         System.out.println("\n[SYSTEM] Executing Hourly Calendar Update...");
 
