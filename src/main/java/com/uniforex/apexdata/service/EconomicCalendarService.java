@@ -22,16 +22,43 @@ public class EconomicCalendarService {
 
     public List<MarketMetric> fetchLiveCalendarEvents() throws Exception {
         Map<String, MarketMetric> uniqueMetrics = new HashMap<>();
+        Document doc = null;
 
-        // Route the request through AllOrigins proxy to bypass Cloudflare WAF on Railway
-        String proxyUrl = "https://api.allorigins.win/raw?url=https://www.forexfactory.com/calendar";
+        // 1. Define the proxy pool array
+        String[] proxyPool = {
+                "https://api.allorigins.win/raw?url=https://www.forexfactory.com/calendar",
+                "https://api.codetabs.com/v1/proxy?quest=https://www.forexfactory.com/calendar",
+                "https://corsproxy.io/?https://www.forexfactory.com/calendar"
+        };
 
-        Document doc = Jsoup.connect(proxyUrl)
-                .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                .timeout(15000)
-                .ignoreContentType(true)
-                .get();
+        // 2. Iterate through the proxies until one works
+        for (String proxyUrl : proxyPool) {
+            try {
+                System.out.println("[SYSTEM] Attempting calendar fetch via proxy: " + proxyUrl.split("/")[2]);
 
+                doc = Jsoup.connect(proxyUrl)
+                        .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                        .header("Accept-Language", "en-US,en;q=0.9")
+                        .timeout(12000) // Strict 12-second timeout per attempt
+                        .ignoreContentType(true)
+                        .get();
+
+                // Break out of the loop if the HTML parsed successfully
+                if (doc != null && doc.selectFirst("tr.calendar__row") != null) {
+                    System.out.println("[SYSTEM] Successfully connected to proxy.");
+                    break;
+                }
+            } catch (Exception e) {
+                System.out.println("[WARNING] Proxy failed or timed out. Falling back to next proxy...");
+            }
+        }
+
+        // If all 3 failed, throw an exception so your scheduler catches it safely
+        if (doc == null || doc.selectFirst("tr.calendar__row") == null) {
+            throw new Exception("All public proxies timed out or were blocked.");
+        }
+
+        // 3. Scrape the HTML payload
         Elements rows = doc.select("tr.calendar__row");
 
         for (Element row : rows) {
@@ -52,7 +79,6 @@ public class EconomicCalendarService {
             String actualText = actualElem.text().trim();
             String forecastText = forecastElem.text().trim();
 
-            // Skip if the actual number hasn't printed yet or there was no forecast
             if (actualText.isEmpty() || forecastText.isEmpty()) {
                 continue;
             }
@@ -96,9 +122,9 @@ public class EconomicCalendarService {
         return new ArrayList<>(uniqueMetrics.values());
     }
 
+    // Retained your multiplier logic to handle thousands (K), millions (M), and billions (B)
     private double parseValue(String val) {
         val = val.replaceAll("<[^>]*>", "").replaceAll("[,%]", "").trim();
-
         double multiplier = 1.0;
         String lowerVal = val.toLowerCase();
 
