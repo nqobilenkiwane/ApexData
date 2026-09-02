@@ -72,8 +72,14 @@ public class EconomicCalendarService {
             double actual = parseValue(actualText);
             double estimate = parseValue(forecastText);
 
-            if (eventTitle.contains("non-farm employment") || eventTitle.contains("nfp")) {
+// 1. Check for ADP FIRST to prevent shadowing
+            if (eventTitle.contains("adp")) {
+                uniqueMetrics.put("ADP Private Employment", new MarketMetric("ADP Private Employment", actual, estimate, 0, MetricCategory.JOB_MARKET));
+
+                // 2. Now it is safe to check for standard NFP
+            } else if (eventTitle.contains("non-farm employment") || eventTitle.contains("nfp")) {
                 uniqueMetrics.put("NFP (Jobs)", new MarketMetric("NFP (Jobs)", actual, estimate, 0, MetricCategory.JOB_MARKET));
+
             } else if (eventTitle.contains("unemployment rate")) {
                 uniqueMetrics.put("Unemployment Rate", new MarketMetric("Unemployment Rate", actual, estimate, 0, MetricCategory.JOB_MARKET));
             } else if (eventTitle.contains("retail sales") || eventTitle.contains("core retail sales")) {
@@ -96,8 +102,6 @@ public class EconomicCalendarService {
                 uniqueMetrics.put("Services PMI", new MarketMetric("Services PMI", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
             } else if (eventTitle.contains("jolts job openings")) {
                 uniqueMetrics.put("JOLTS Job Openings", new MarketMetric("JOLTS Job Openings", actual, estimate, 0, MetricCategory.JOB_MARKET));
-            } else if (eventTitle.contains("adp non-farm")) {
-                uniqueMetrics.put("ADP Private Employment", new MarketMetric("ADP Private Employment", actual, estimate, 0, MetricCategory.JOB_MARKET));
             } else if (eventTitle.contains("cpi")) {
                 uniqueMetrics.put("YoY Inflation", new MarketMetric("YoY Inflation", actual, estimate, 0, MetricCategory.INFLATION));
             } else if (eventTitle.contains("gdp")) {
