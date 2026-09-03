@@ -116,6 +116,7 @@ public class EngineScheduler {
             System.out.println("[SYSTEM] Fetching Technicals...");
             try {
                 cachedTechData = technicalService.fetchUsdTechnicals();
+                System.out.println("[DEBUG] Calendar Events Found");
             } catch (Exception e) {
                 System.err.println("[API Error] Technicals: " + e.getMessage());
                 System.out.println("[SYSTEM] Rate limit hit. Retaining previously cached Technical Data.");
