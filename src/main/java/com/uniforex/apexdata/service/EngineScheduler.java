@@ -35,7 +35,7 @@ public class EngineScheduler {
 
     // Cache for slow-moving macro data so the fast calendar cycle can reuse it
     private List<MarketMetric> cachedInstitutionalMetrics = new ArrayList<>();
-    private TechnicalService.TechnicalData cachedTechData = new TechnicalService.TechnicalData(0.86, 0.859, 50.0, 4.34, 4.75); // Fallback init
+    private TechnicalService.TechnicalData cachedTechData = new TechnicalService.TechnicalData(0.85, 0.859, 50.0, 4.39, 4.79); // Fallback init
 
     public EngineScheduler(
             CalendarEventRepository calendarRepo,
