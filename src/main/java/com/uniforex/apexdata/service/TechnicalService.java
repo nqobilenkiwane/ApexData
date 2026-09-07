@@ -28,8 +28,11 @@ public class TechnicalService {
         this.apiKey = apiKey;
     }
 
-    // Expanded DTO to hold both FX technicals and Bond Yields
+    // Existing DTO for USD (includes Macro Yields)
     public record TechnicalData(double currentPrice, double sma200, double rsi14, double yield2Y, double yield10Y) {}
+
+    // New lightweight DTO strictly for Asset Technicals (Yields are handled in the Macro baseline)
+    public record AssetTechnicalData(double currentPrice, double sma200, double rsi14) {}
 
     public TechnicalData fetchUsdTechnicals() throws Exception {
         // 1. Fetch Treasury Yields
@@ -37,36 +40,7 @@ public class TechnicalService {
         double yield10Y = fetchLatestYield("10year");
 
         // 2. Fetch USD/EUR daily prices
-        String url = String.format(
-                "https://www.alphavantage.co/query?function=FX_DAILY&from_symbol=USD&to_symbol=EUR&outputsize=full&apikey=%s",
-                apiKey
-        );
-
-        String json = client.fetchRawJson(url);
-        JsonNode rootNode = mapper.readTree(json);
-        JsonNode timeSeriesNode = rootNode.get("Time Series FX (Daily)");
-
-        if (timeSeriesNode == null) {
-            throw new RuntimeException("Failed to fetch Alpha Vantage data. Check your API key or rate limits.");
-        }
-
-        List<String> dates = new ArrayList<>();
-        timeSeriesNode.fieldNames().forEachRemaining(dates::add);
-        Collections.sort(dates);
-
-        BarSeries series = new BaseBarSeriesBuilder().withName("USD_EUR").build();
-
-        for (String dateString : dates) {
-            JsonNode dailyNode = timeSeriesNode.get(dateString);
-            double open = dailyNode.get("1. open").asDouble();
-            double high = dailyNode.get("2. high").asDouble();
-            double low = dailyNode.get("3. low").asDouble();
-            double close = dailyNode.get("4. close").asDouble();
-
-            LocalDate date = LocalDate.parse(dateString);
-            ZonedDateTime zdt = date.atStartOfDay(ZoneId.of("UTC"));
-            series.addBar(zdt, open, high, low, close, 0.0);
-        }
+        BarSeries series = fetchAlphaVantageFxSeries("USD", "EUR");
 
         ClosePriceIndicator closePrice = new ClosePriceIndicator(series);
         SMAIndicator sma200 = new SMAIndicator(closePrice, 200);
@@ -83,7 +57,68 @@ public class TechnicalService {
         );
     }
 
-    // Helper method to extract Alpha Vantage's Treasury JSON structure
+    /**
+     * Fetches technical momentum specifically for Gold (XAU/USD).
+     */
+    public AssetTechnicalData fetchGoldTechnicals() throws Exception {
+        // Alpha Vantage treats physical Gold (XAU) as a currency in the FX endpoint
+        BarSeries series = fetchAlphaVantageFxSeries("XAU", "USD");
+
+        ClosePriceIndicator closePrice = new ClosePriceIndicator(series);
+        SMAIndicator sma200 = new SMAIndicator(closePrice, 200);
+        RSIIndicator rsi14 = new RSIIndicator(closePrice, 14);
+
+        int endIndex = series.getEndIndex();
+
+        return new AssetTechnicalData(
+                closePrice.getValue(endIndex).doubleValue(),
+                sma200.getValue(endIndex).doubleValue(),
+                rsi14.getValue(endIndex).doubleValue()
+        );
+    }
+
+    // ========================================================================
+    // HELPER METHODS
+    // ========================================================================
+
+    /**
+     * Reusable helper method to fetch and build a ta4j BarSeries for any FX pair.
+     * Prevents code duplication between the USD and Gold technical endpoints.
+     */
+    private BarSeries fetchAlphaVantageFxSeries(String fromSymbol, String toSymbol) throws Exception {
+        String url = String.format(
+                "https://www.alphavantage.co/query?function=FX_DAILY&from_symbol=%s&to_symbol=%s&outputsize=full&apikey=%s",
+                fromSymbol, toSymbol, apiKey
+        );
+
+        String json = client.fetchRawJson(url);
+        JsonNode rootNode = mapper.readTree(json);
+        JsonNode timeSeriesNode = rootNode.get("Time Series FX (Daily)");
+
+        if (timeSeriesNode == null) {
+            throw new RuntimeException("Failed to fetch " + fromSymbol + "/" + toSymbol + " data. Check API key or rate limits.");
+        }
+
+        List<String> dates = new ArrayList<>();
+        timeSeriesNode.fieldNames().forEachRemaining(dates::add);
+        Collections.sort(dates);
+
+        BarSeries series = new BaseBarSeriesBuilder().withName(fromSymbol + "_" + toSymbol).build();
+
+        for (String dateString : dates) {
+            JsonNode dailyNode = timeSeriesNode.get(dateString);
+            double open = dailyNode.get("1. open").asDouble();
+            double high = dailyNode.get("2. high").asDouble();
+            double low = dailyNode.get("3. low").asDouble();
+            double close = dailyNode.get("4. close").asDouble();
+
+            LocalDate date = LocalDate.parse(dateString);
+            ZonedDateTime zdt = date.atStartOfDay(ZoneId.of("UTC"));
+            series.addBar(zdt, open, high, low, close, 0.0);
+        }
+        return series;
+    }
+
     private double fetchLatestYield(String maturity) {
         try {
             String url = String.format("https://www.alphavantage.co/query?function=TREASURY_YIELD&interval=daily&maturity=%s&apikey=%s", maturity, apiKey);
@@ -93,7 +128,6 @@ public class TechnicalService {
 
             if (dataNode != null && dataNode.isArray() && dataNode.size() > 0) {
                 String val = dataNode.get(0).get("value").asText();
-                // Alpha Vantage returns "." on bank holidays. Skip parsing if true.
                 if (!".".equals(val)) {
                     return Double.parseDouble(val);
                 }

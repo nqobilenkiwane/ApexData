@@ -5,9 +5,10 @@ import LogoDark from './LogoDark'
 function App() {
   const [summary, setSummary] = useState(null)
   const [history, setHistory] = useState([])
+  const [goldSummary, setGoldSummary] = useState(null)
   const [loading, setLoading] = useState(true)
 
-useEffect(() => {
+  useEffect(() => {
     const baseUrl = 'https://apexdata-production-dc24.up.railway.app';
 
     Promise.all([
@@ -18,12 +19,21 @@ useEffect(() => {
       fetch(`${baseUrl}/api/dashboard/history`).then(res => {
         if (!res.ok) throw new Error(`History API failed with status ${res.status}`);
         return res.json();
-      })
+      }),
+      fetch(`${baseUrl}/api/dashboard/gold`).then(res => {
+        // Soft fail for Gold if the engine hasn't completed its first run yet
+        if (!res.ok) return null;
+        return res.json();
+      }).catch(() => null)
     ])
-      .then(([summaryData, historyData]) => {
+      .then(([summaryData, historyData, goldData]) => {
         setSummary(summaryData);
+        setGoldSummary(goldData);
+
         if (Array.isArray(historyData)) {
-          const formattedHistory = historyData.map(item => ({
+          // Filter to only show USD scores in the trend chart for now
+          const usdHistory = historyData.filter(item => item.currency === 'USD' || !item.currency);
+          const formattedHistory = usdHistory.map(item => ({
             ...item,
             displayDate: new Date(item.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
           }));
@@ -41,14 +51,12 @@ useEffect(() => {
   if (loading) return <div style={styles.loading}>Initializing ApexData Engine...</div>
   if (!summary) return <div style={styles.loading}>Failed to load market data.</div>
 
-  // 1. Strict coloring for the overall -22 to +22 score
   const getCompositeScoreColor = (score) => {
     if (score >= 4) return '#00ff88';
     if (score <= -4) return '#ff3366';
     return '#888888';
   };
 
-  // 2. Simple +/- coloring for the individual metrics and categories
   const getMetricScoreColor = (score) => {
     if (score > 0) return '#00ff88';
     if (score < 0) return '#ff3366';
@@ -56,9 +64,9 @@ useEffect(() => {
   };
 
   const getActualValueColor = (scoreDelta) => {
-        if (scoreDelta > 0) return '#00ff88';
-        if (scoreDelta < 0) return '#ff3366';
-        return '#FFFFFF'; // Keeps neutral 0 prints white for readability
+    if (scoreDelta > 0) return '#00ff88';
+    if (scoreDelta < 0) return '#ff3366';
+    return '#FFFFFF';
   };
 
   const formatCategory = (cat) => {
@@ -74,7 +82,7 @@ useEffect(() => {
             Score: <span style={{ color: getCompositeScoreColor(payload[0].value) }}>{payload[0].value}</span>
           </p>
           <p style={{ color: '#888888', fontSize: '0.8rem', marginTop: '4px' }}>
-            Bias: {payload[0].payload.biasLabel || 'Neutral'}
+            Bias: {payload[0].payload.biasLabel || payload[0].payload.bias_label || 'Neutral'}
           </p>
         </div>
       );
@@ -82,7 +90,6 @@ useEffect(() => {
     return null;
   };
 
-  // Define this right above your return statement
   const CATEGORY_ORDER = [
       'ECONOMIC_GROWTH',
       'JOB_MARKET',
@@ -95,30 +102,76 @@ useEffect(() => {
   return (
     <div style={styles.container}>
       <header style={styles.header}>
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10px' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '30px' }}>
           <LogoDark width={350} height={120} />
         </div>
-        <div style={styles.biasContainer}>
-          <div style={styles.scoreBox}>
-            <span style={styles.scoreLabel}>USD COMPOSITE SCORE</span>
-            <span style={{...styles.scoreValue, color: getCompositeScoreColor(summary.totalScore)}}>
-              {summary.totalScore > 0 ? '+' : ''}{summary.totalScore}
-            </span>
+
+        {/* MULTI-ASSET DASHBOARD HEADER */}
+        <div style={styles.assetContainer}>
+
+          {/* USD MACRO CARD */}
+          <div style={styles.assetCard}>
+            <div style={styles.assetHeader}>
+              <span style={styles.assetTitle}>US DOLLAR (DXY)</span>
+              <span style={{...styles.assetScore, color: getCompositeScoreColor(summary.totalScore)}}>
+                {summary.totalScore > 0 ? '+' : ''}{summary.totalScore}
+              </span>
+            </div>
+            <div style={{textAlign: 'center', margin: '15px 0'}}>
+              <span style={styles.scoreLabel}>MACRO BIAS</span>
+              <div style={{...styles.biasValue, color: getCompositeScoreColor(summary.totalScore)}}>
+                {summary.overallBias}
+              </div>
+            </div>
           </div>
-          <div style={styles.biasBox}>
-            <span style={styles.scoreLabel}>MARKET BIAS</span>
-            <span style={{...styles.biasValue, color: getCompositeScoreColor(summary.totalScore)}}>
-              {summary.overallBias}
-            </span>
-          </div>
+
+          {/* GOLD (XAUUSD) CARD */}
+          {goldSummary && (
+            <div style={styles.assetCard}>
+              <div style={styles.assetHeader}>
+                <span style={styles.assetTitle}>GOLD (XAUUSD)</span>
+                <span style={{...styles.assetScore, color: getCompositeScoreColor(goldSummary.totalScore)}}>
+                  {goldSummary.totalScore > 0 ? '+' : ''}{goldSummary.totalScore}
+                </span>
+              </div>
+              <div style={{textAlign: 'center', margin: '10px 0 20px 0'}}>
+                <span style={styles.scoreLabel}>COMPOSITE BIAS</span>
+                <div style={{...styles.biasValue, fontSize: '1.8rem', color: getCompositeScoreColor(goldSummary.totalScore)}}>
+                  {goldSummary.biasLabel}
+                </div>
+              </div>
+
+              {/* Gold Sub-Component Breakdown */}
+              <div style={styles.breakdownContainer}>
+                <div style={styles.breakdownRow}>
+                  <span style={styles.breakdownLabel}>USD Macro Inversion</span>
+                  <span style={{...styles.breakdownScore, color: getMetricScoreColor(goldSummary.invertedMacroBaseline)}}>
+                    {goldSummary.invertedMacroBaseline > 0 ? '+' : ''}{goldSummary.invertedMacroBaseline}
+                  </span>
+                </div>
+                <div style={styles.breakdownRow}>
+                  <span style={styles.breakdownLabel}>COT Sentiment</span>
+                  <span style={{...styles.breakdownScore, color: getMetricScoreColor(goldSummary.cotScore)}}>
+                    {goldSummary.cotScore > 0 ? '+' : ''}{goldSummary.cotScore}
+                  </span>
+                </div>
+                <div style={styles.breakdownRow}>
+                  <span style={styles.breakdownLabel}>Technical Momentum</span>
+                  <span style={{...styles.breakdownScore, color: getMetricScoreColor(goldSummary.technicalScore)}}>
+                    {goldSummary.technicalScore > 0 ? '+' : ''}{goldSummary.technicalScore}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </header>
 
-      {/* 3. HISTORICAL TREND CHART (ZONE-BASED DIVERGING BAR) */}
+      {/* HISTORICAL TREND CHART */}
       {history.length > 0 && (
         <div style={styles.chartSection}>
           <div style={styles.cardHeader}>
-            <h2 style={styles.cardTitle}>USD SCORE TREND</h2>
+            <h2 style={styles.cardTitle}>USD MACRO TREND</h2>
           </div>
           <div style={styles.chartWrapper}>
             <ResponsiveContainer width="100%" height="100%">
@@ -127,17 +180,10 @@ useEffect(() => {
                 <XAxis dataKey="displayDate" stroke="#888888" tick={{ fill: '#888888', fontSize: 12 }} tickMargin={10} />
                 <YAxis stroke="#888888" tick={{ fill: '#888888', fontSize: 12 }} domain={[-22, 22]} />
                 <Tooltip content={<CustomTooltip />} cursor={{fill: '#1a1a1a'}} />
-
-                {/* Strongly Bullish (+10 to +22) */}
                 <ReferenceArea y1={10} y2={22} fill="#00ff88" fillOpacity={0.15} />
-                {/* Bullish (+4 to +9.99) */}
                 <ReferenceArea y1={4} y2={9.99} fill="#00ff88" fillOpacity={0.05} />
-
-                {/* Bearish (-4 to -9.99) */}
                 <ReferenceArea y1={-4} y2={-9.99} fill="#ff3366" fillOpacity={0.05} />
-                {/* Strongly Bearish (-10 to -22) */}
                 <ReferenceArea y1={-10} y2={-22} fill="#ff3366" fillOpacity={0.15} />
-
                 <ReferenceLine y={0} stroke="#444444" strokeWidth={2} />
                 <Bar dataKey="totalScore" fill="#E2E8F0" radius={[2, 2, 2, 2]} />
               </BarChart>
@@ -146,50 +192,46 @@ useEffect(() => {
         </div>
       )}
 
-        {/* 4. METRICS GRID */}
-        <div style={styles.grid}>
-          {CATEGORY_ORDER.map((category) => {
-            // Grab the score for this specific category from the backend summary
-            const catScore = summary.categoryScores[category];
+      {/* METRICS GRID */}
+      <div style={styles.grid}>
+        {CATEGORY_ORDER.map((category) => {
+          const catScore = summary.categoryScores[category];
+          if (catScore === undefined) return null;
 
-            // If the backend hasn't returned this category yet, skip rendering the card
-            if (catScore === undefined) return null;
-
-            return (
-              <div key={category} style={styles.card}>
-                <div style={styles.cardHeader}>
-                  <h2 style={styles.cardTitle}>{formatCategory(category)}</h2>
-                  <span style={{...styles.catScoreBadge, color: getMetricScoreColor(catScore)}}>
-                    {catScore > 0 ? '+' : ''}{catScore}
-                  </span>
-                </div>
-
-                <div style={styles.metricList}>
-                  {summary.metrics
-                    .filter(m => m.category === category)
-                    .map(metric => (
-                      <div key={metric.name} style={styles.metricRow}>
-                        <div style={styles.metricName}>{metric.name}</div>
-                        <div style={styles.metricValues}>
-                          <span style={{ ...styles.actual, color: getActualValueColor(metric.scoreDelta) }}>
-                            Act: {Number(metric.actualValue).toFixed(2)}
-                          </span>
-                          {metric.forecastValue !== 0 && (
-                            <span style={styles.estimate}>
-                              Est: {Number(metric.forecastValue).toFixed(2)}
-                            </span>
-                          )}
-                        </div>
-                        <div style={{...styles.metricScore, color: getMetricScoreColor(metric.scoreDelta)}}>
-                          {metric.scoreDelta > 0 ? '+' : ''}{metric.scoreDelta}
-                        </div>
-                      </div>
-                    ))}
-                </div>
+          return (
+            <div key={category} style={styles.card}>
+              <div style={styles.cardHeader}>
+                <h2 style={styles.cardTitle}>{formatCategory(category)}</h2>
+                <span style={{...styles.catScoreBadge, color: getMetricScoreColor(catScore)}}>
+                  {catScore > 0 ? '+' : ''}{catScore}
+                </span>
               </div>
-            );
-          })}
-        </div>
+              <div style={styles.metricList}>
+                {summary.metrics
+                  .filter(m => m.category === category)
+                  .map(metric => (
+                    <div key={metric.name} style={styles.metricRow}>
+                      <div style={styles.metricName}>{metric.name}</div>
+                      <div style={styles.metricValues}>
+                        <span style={{ ...styles.actual, color: getActualValueColor(metric.scoreDelta) }}>
+                          Act: {Number(metric.actualValue).toFixed(2)}
+                        </span>
+                        {metric.forecastValue !== 0 && (
+                          <span style={styles.estimate}>
+                            Est: {Number(metric.forecastValue).toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{...styles.metricScore, color: getMetricScoreColor(metric.scoreDelta)}}>
+                        {metric.scoreDelta > 0 ? '+' : ''}{metric.scoreDelta}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   )
 }
@@ -197,14 +239,22 @@ useEffect(() => {
 const styles = {
   container: { backgroundColor: '#000000', minHeight: '100vh', color: '#FFFFFF', fontFamily: "'Inter', 'Segoe UI', sans-serif", padding: '40px 20px' },
   loading: { backgroundColor: '#000000', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563EB', fontSize: '24px', fontFamily: 'monospace' },
-  header: { maxWidth: '1200px', margin: '0 auto 40px', textAlign: 'center' },
-  biasContainer: { display: 'flex', justifyContent: 'center', gap: '20px' },
+  header: { maxWidth: '1400px', margin: '0 auto 40px' },
 
-  scoreBox: { backgroundColor: '#111111', padding: '20px 40px', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', border: '1px solid #222222' },
-  biasBox: { backgroundColor: '#111111', padding: '20px 60px', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', border: '1px solid #222222' },
-  scoreLabel: { fontSize: '0.85rem', color: '#888888', letterSpacing: '1px', marginBottom: '10px' },
-  scoreValue: { fontSize: '3rem', fontWeight: 'bold' },
-  biasValue: { fontSize: '2.5rem', fontWeight: 'bold' },
+  // Multi-Asset Header Styles
+  assetContainer: { display: 'flex', justifyContent: 'center', gap: '25px', flexWrap: 'wrap' },
+  assetCard: { backgroundColor: '#111111', padding: '25px', borderRadius: '8px', border: '1px solid #222222', flex: '1', minWidth: '320px', maxWidth: '450px', display: 'flex', flexDirection: 'column' },
+  assetHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #222222', paddingBottom: '15px' },
+  assetTitle: { fontSize: '1.2rem', color: '#FFFFFF', letterSpacing: '2px', fontWeight: 'bold' },
+  assetScore: { fontSize: '2rem', fontWeight: 'bold' },
+
+  breakdownContainer: { display: 'flex', flexDirection: 'column', gap: '8px', marginTop: 'auto', backgroundColor: '#000000', padding: '15px', borderRadius: '6px', border: '1px solid #1A1A1A' },
+  breakdownRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.9rem' },
+  breakdownLabel: { color: '#888888' },
+  breakdownScore: { fontWeight: 'bold', fontSize: '1rem' },
+
+  scoreLabel: { fontSize: '0.85rem', color: '#888888', letterSpacing: '1px', marginBottom: '5px', display: 'block' },
+  biasValue: { fontSize: '2.5rem', fontWeight: 'bold', textTransform: 'uppercase' },
 
   chartSection: { maxWidth: '1400px', margin: '0 auto 40px', backgroundColor: '#111111', borderRadius: '8px', padding: '25px', border: '1px solid #222222' },
   chartWrapper: { height: '350px', width: '100%', marginTop: '20px' },

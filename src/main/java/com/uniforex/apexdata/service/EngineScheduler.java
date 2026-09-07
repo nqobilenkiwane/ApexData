@@ -60,7 +60,6 @@ public class EngineScheduler {
     public void primeStateOnStartup() {
         System.out.println("\n[SYSTEM] Application Started. Priming dashboard state from database...");
         try {
-            // Immediately load the existing DB data and generate a score so the UI has something to render
             rebuildAndScoreState();
         } catch (Exception e) {
             System.err.println("[SYSTEM] Failed to prime state on startup: " + e.getMessage());
@@ -89,7 +88,6 @@ public class EngineScheduler {
                 calendarRepo.save(new CalendarEventEntity(event.name(), event.actualValue(), event.forecastValue(), event.category()));
             }
 
-            // Rebuild the dashboard state using new calendar data + cached macro data
             rebuildAndScoreState();
 
         } catch (Exception e) {
@@ -102,14 +100,6 @@ public class EngineScheduler {
     public void executeMacroCycle() {
         System.out.println("\n[SYSTEM] Executing 12-Hour Macro & Technicals...");
         try {
-//            System.out.println("[SYSTEM] Fetching CFTC data...");
-//            try {
-//                cachedInstitutionalMetrics = cftcService.fetchInstitutionalData();
-//                System.out.println("[DEBUG] CFTC Metrics Found: " + cachedInstitutionalMetrics.size());
-//            } catch (Exception e) {
-//                System.err.println("[API Error] CFTC: " + e.getMessage());
-//            }
-
             // 12-second buffer to guarantee we do not trip the 5 req/min rate limit
             Thread.sleep(12000);
 
@@ -122,7 +112,6 @@ public class EngineScheduler {
                 System.out.println("[SYSTEM] Rate limit hit. Retaining previously cached Technical Data.");
             }
 
-            // Rebuild the dashboard state using cached calendar data + new macro data
             rebuildAndScoreState();
 
         } catch (InterruptedException e) {
@@ -178,6 +167,9 @@ public class EngineScheduler {
                 totalScore, overallBias, categoryScores, scoredMetrics
         );
         stateService.setLatestSummary(summary);
+
+        // 7. ORCHESTRATION HOOK: Trigger Gold Pipeline immediately after USD Macro is secured
+        stateService.updateGoldPipeline(this.cftcService, this.technicalService, this.engine);
 
         System.out.printf("[SYSTEM] Dashboard State Rebuilt. USD Score (%+d / %s) saved to ledger.\n", totalScore, overallBias);
     }
