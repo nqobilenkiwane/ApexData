@@ -11,8 +11,8 @@ import java.util.stream.Collectors;
 public class CompositeScoringEngine {
 
     /**
-     * Iterates through raw metrics, applies mathematical scoring logic,
-     * and returns an immutable list of scored metrics.
+     * Iterates through raw metrics, applies the existing mathematical logic,
+     * and returns a new list of fully scored metrics.
      */
     public List<MarketMetric> applyScores(List<MarketMetric> rawMetrics) {
         List<MarketMetric> scoredMetrics = new ArrayList<>();
@@ -21,10 +21,10 @@ public class CompositeScoringEngine {
             int score = 0;
 
             if (m.forecastValue() != 0.0) {
-                // PRIORITY: Score surprise factor if an estimate/forecast exists
+                // PRIORITY: If an estimate (or Moving Average) exists, score the Surprise Factor
                 score = scoreSurprise(m);
             } else {
-                // FALLBACK: Absolute threshold scoring for metrics without estimates
+                // FALLBACK: Absolute scoring logic for metrics without estimates
                 switch (m.name()) {
                     case "Unemployment Rate":
                         score = scoreLaborMarket(m.actualValue());
@@ -38,14 +38,17 @@ public class CompositeScoringEngine {
                     case "Retail Sales (MoM)":
                         score = scoreRetailSales(m.actualValue());
                         break;
+//                    case "10Y Real Yield":
+//                        // Positive real yield attracts capital (+1). Negative repels it (-1).
+//                        score = m.actualValue() > 0 ? 1 : -1;
+//                        break;
+//                    case "2s10s Yield Curve":
+//                        // Normal curve (+1). Inverted curve means recession risk (-1).
+//                        score = m.actualValue() > 0 ? 1 : -1;
+//                        break;
                     case "YoY Inflation":
+                        // If no estimate is available, high inflation is broadly Hawkish/Bullish
                         score = m.actualValue() > 2.0 ? 1 : -1;
-                        break;
-                    case "10Y Real Yield":
-                        score = m.actualValue() > 0 ? 1 : -1;
-                        break;
-                    case "2s10s Yield Curve":
-                        score = scoreYieldCurve(m.actualValue());
                         break;
                     case "COT Net Positioning":
                         score = m.actualValue() > 0 ? 1 : (m.actualValue() < 0 ? -1 : 0);
@@ -53,7 +56,7 @@ public class CompositeScoringEngine {
                     case "COT Long Percentage":
                         double pct = m.actualValue();
                         if (pct >= 80) score = -1;       // Bearish (Overcrowded Longs)
-                        else if (pct <= 20) score = 1;   // Bullish (Short Squeeze Risk)
+                        else if (pct <= 20) score = 1;   // Bullish (Short Squeeze)
                         else if (pct >= 55) score = 1;   // Bullish (Healthy Trend)
                         else if (pct <= 45) score = -1;  // Bearish (Healthy Short)
                         else score = 0;                  // Neutral
@@ -62,6 +65,7 @@ public class CompositeScoringEngine {
                         score = 0;
                 }
             }
+            // Create a fresh, immutable record with the calculated score
             scoredMetrics.add(new MarketMetric(m.name(), m.actualValue(), m.forecastValue(), score, m.category()));
         }
         return scoredMetrics;
@@ -72,13 +76,13 @@ public class CompositeScoringEngine {
      */
     public int scoreSurprise(MarketMetric metric) {
         double surprise = metric.actualValue() - metric.forecastValue();
-        double epsilon = 0.0001;
+        double epsilon = 0.0001; // Avoid floating point rounding issues
 
         if (Math.abs(surprise) < epsilon) {
-            return 0; // Neutral (Met expectations)
+            return 0; // Neutral (Met expectations perfectly)
         }
 
-        // Inverse indicators: Higher than forecast is bearish for currency/growth
+        // Inverse indicators: Higher than forecast is BAD for the economy/currency
         boolean isInverse = metric.name().equalsIgnoreCase("Unemployment Rate")
                 || metric.name().contains("Jobless Claims");
 
@@ -90,7 +94,7 @@ public class CompositeScoringEngine {
     }
 
     /**
-     * Groups metrics by Category and calculates category-level sub-scores.
+     * Groups the metrics by Category and sums their scores dynamically.
      */
     public Map<MetricCategory, Integer> calculateCategoryScores(List<MarketMetric> scoredMetrics) {
         return scoredMetrics.stream()
@@ -101,83 +105,57 @@ public class CompositeScoringEngine {
     }
 
     /**
-     * Calculates the overall total score across all metrics in the list.
+     * Calculates the absolute total score across all data points.
      */
     public int calculateTotalScore(List<MarketMetric> scoredMetrics) {
         return scoredMetrics.stream().mapToInt(MarketMetric::scoreDelta).sum();
     }
 
-    // ========================================================================
-    // DECOUPLED MACRO & CROSS-ASSET LOGIC
-    // ========================================================================
-
-    /**
-     * Isolates macroeconomic fundamentals (Growth, Jobs, Inflation, Yields)
-     * by excluding asset-specific Technical and COT categories.
-     */
-    public int calculateMacroSubtotal(List<MarketMetric> scoredMetrics) {
-        return scoredMetrics.stream()
-                .filter(m -> isMacroCategory(m.category()))
-                .mapToInt(MarketMetric::scoreDelta)
-                .sum();
-    }
-
-    /**
-     * Filters out asset-specific technical and sentiment categories.
-     */
-    public boolean isMacroCategory(MetricCategory category) {
-        if (category == null) return false;
-        String name = category.name().toUpperCase();
-        return !name.contains("TECHNICAL") && !name.contains("COT") && !name.contains("SENTIMENT");
-    }
-
-    /**
-     * Calculates a dedicated XAUUSD composite score using the inverted USD
-     * macroeconomic baseline combined with Gold-specific COT and technical overlays.
-     *
-     * Formula: (USD_Macro_Subtotal * -1) + Gold_COT_Score + Gold_Technical_Score
-     */
-    public int calculateGoldCompositeScore(int usdMacroSubtotal, int goldCotScore, int goldTechScore) {
-        int invertedMacro = usdMacroSubtotal * -1;
-        return invertedMacro + goldCotScore + goldTechScore;
-    }
-
-    /**
-     * Evaluates Gold CFTC Commitment of Traders (Non-Commercial Speculator positioning).
-     */
-    public int scoreGoldCot(long nonCommercialLongs, long nonCommercialShorts, long previousNetPosition) {
-        long currentNet = nonCommercialLongs - nonCommercialShorts;
-
-        // Hedge funds aggressively expanding net longs
-        if (currentNet > previousNetPosition && currentNet > 0) {
-            return 1;
-        }
-        // Hedge funds aggressively expanding net shorts
-        else if (currentNet < previousNetPosition && currentNet < 0) {
-            return -1;
-        }
-        return 0;
-    }
-
-    /**
-     * Evaluates standalone technical momentum for an asset.
-     */
-    public int scoreTechnicals(double currentPrice, double sma200, double rsi14) {
-        boolean isUptrend = currentPrice > sma200;
-        boolean isBullishMomentum = rsi14 > 50.0 && rsi14 < 70.0;
-        boolean isBearishMomentum = rsi14 < 50.0 && rsi14 > 30.0;
-
-        if (isUptrend && isBullishMomentum) {
-            return 1;
-        } else if (!isUptrend && isBearishMomentum) {
-            return -1;
-        }
-        return 0;
-    }
+//    public int scoreSurprise(MarketMetric metric) {
+//        double surprise = metric.actualValue() - metric.forecastValue();
+//        double epsilon = 0.0001; // Avoid floating point rounding issues
+//
+//        if (Math.abs(surprise) < epsilon) {
+//            return 0; // Neutral (Met expectations)
+//        }
+//
+//        // Inverse indicators: Higher than forecast is BAD for currency/growth
+//        boolean isInverse = metric.name().equalsIgnoreCase("Unemployment Rate")
+//                || metric.name().contains("Jobless Claims");
+//
+//        if (isInverse) {
+//            return surprise > 0 ? -1 : 1;
+//        } else {
+//            return surprise > 0 ? 1 : -1;
+//        }
+//    }
 
     // ========================================================================
-    // BIAS LABELS & ABSOLUTE THRESHOLDS
+    // EXISTING SCORING LOGIC (Untouched)
     // ========================================================================
+
+//    public int scoreMacroFundamentals(double interestRate, double inflationRate) {
+//        double realYield = interestRate - inflationRate;
+//        double threshold = 0.5;
+//
+//        if (realYield > threshold) {
+//            return 1;
+//        } else if (realYield < -threshold) {
+//            return -1;
+//        } else {
+//            return 0;
+//        }
+//    }
+
+//    public int scoreInstitutionalPositioning(double netPositions) {
+//        if (netPositions > 0) {
+//            return 1;
+//        } else if (netPositions < 0) {
+//            return -1;
+//        } else {
+//            return 0;
+//        }
+//    }
 
     public String getOverallBiasLabel(int totalScore) {
         if (totalScore >= 10) {
@@ -191,6 +169,12 @@ public class CompositeScoringEngine {
         } else {
             return "STRONGLY BEARISH";
         }
+//        if (totalScore > 9) return "STRONGLY BULLISH";
+//        if (totalScore >= 4) return "BULLISH";
+//        if (totalScore == 0) return "NEUTRAL";
+//        if (totalScore <= -4) return "BEARISH";
+//        if (totalScore < -9) return "STRONGLY BEARISH";
+//        return "UNKNOWN";
     }
 
     public int scoreLaborMarket(double unemploymentRate) {
@@ -198,8 +182,9 @@ public class CompositeScoringEngine {
             return 1;
         } else if (unemploymentRate > 4.5) {
             return -1;
+        } else {
+            return 0;
         }
-        return 0;
     }
 
     public int scoreNfp(double nfpChange) {
@@ -207,8 +192,9 @@ public class CompositeScoringEngine {
             return 1;
         } else if (nfpChange < 100.0) {
             return -1;
+        } else {
+            return 0;
         }
-        return 0;
     }
 
     public int scoreGdp(double gdp) {
@@ -216,8 +202,9 @@ public class CompositeScoringEngine {
             return 1;
         } else if (gdp < 1.0) {
             return -1;
+        } else {
+            return 0;
         }
-        return 0;
     }
 
     public int scoreRetailSales(double momRetailSales) {
@@ -225,25 +212,41 @@ public class CompositeScoringEngine {
             return 1;
         } else if (momRetailSales < -0.1) {
             return -1;
+        } else {
+            return 0;
         }
-        return 0;
     }
 
+    public int scoreTechnicals(double currentPrice, double sma200, double rsi14) {
+        boolean isUptrend = currentPrice > sma200;
+        boolean isBullishMomentum = rsi14 > 50.0;
+
+        if (isUptrend && isBullishMomentum) {
+            return 1;
+        } else if (!isUptrend && !isBullishMomentum) {
+            return -1;
+        } else {
+            return 0;
+        }
+    }
+
+    // Evaluates absolute yield levels. High yields attract foreign capital (+1).
     public int scoreAbsoluteYield(double currentYield, double baselineThreshold) {
         if (currentYield >= baselineThreshold) {
-            return 1;
+            return 1; // Hawkish / Attractive to foreign capital
         } else if (currentYield <= baselineThreshold - 0.75) {
-            return -1;
+            return -1; // Dovish / Capital flights to higher-yielding currencies
         }
-        return 0;
+        return 0; // Neutral zone
     }
 
+    // Evaluates the 2s10s spread. An inverted curve (< 0) signals recession fears, triggering USD safe-haven buying.
     public int scoreYieldCurve(double yieldCurve) {
         if (yieldCurve <= -0.10) {
-            return 1;  // Inverted curve (Recession risk / USD safe-haven demand)
+            return 1; // Deeply inverted (Panic buying USD)
         } else if (yieldCurve >= 0.20) {
-            return -1; // Normal curve steepening
+            return -1; // Normal steepening (Risk-on environment, capital leaves USD)
         }
-        return 0;
+        return 0; // Flat/Neutral
     }
 }

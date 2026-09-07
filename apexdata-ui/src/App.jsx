@@ -7,27 +7,36 @@ function App() {
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
+useEffect(() => {
+    const baseUrl = 'https://apexdata-production-dc24.up.railway.app';
+
     Promise.all([
-      fetch('http://localhost:8080/api/v1/dashboard/summary').then(res => res.json()),
-      fetch('http://localhost:8080/api/v1/dashboard/history').then(res => res.json())
+      fetch(`${baseUrl}/api/dashboard/summary`).then(res => {
+        if (!res.ok) throw new Error(`Summary API failed with status ${res.status}`);
+        return res.json();
+      }),
+      fetch(`${baseUrl}/api/dashboard/history`).then(res => {
+        if (!res.ok) throw new Error(`History API failed with status ${res.status}`);
+        return res.json();
+      })
     ])
       .then(([summaryData, historyData]) => {
-        setSummary(summaryData)
-        const formattedHistory = historyData.map(item => ({
-          ...item,
-          // Changed to displayDate and formatted to show "Aug 25"
-          displayDate: new Date(item.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-        }))
-        setHistory(formattedHistory)
-
-        setLoading(false)
+        setSummary(summaryData);
+        if (Array.isArray(historyData)) {
+          const formattedHistory = historyData.map(item => ({
+            ...item,
+            displayDate: new Date(item.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+          }));
+          setHistory(formattedHistory);
+        }
+        setLoading(false);
       })
       .catch(error => {
-        console.error("Error fetching data:", error)
-        setLoading(false)
-      })
-  }, [])
+        console.error("Error fetching data:", error);
+        setSummary(null);
+        setLoading(false);
+      });
+  }, []);
 
   if (loading) return <div style={styles.loading}>Initializing ApexData Engine...</div>
   if (!summary) return <div style={styles.loading}>Failed to load market data.</div>
@@ -44,6 +53,12 @@ function App() {
     if (score > 0) return '#00ff88';
     if (score < 0) return '#ff3366';
     return '#888888';
+  };
+
+  const getActualValueColor = (scoreDelta) => {
+        if (scoreDelta > 0) return '#00ff88';
+        if (scoreDelta < 0) return '#ff3366';
+        return '#FFFFFF'; // Keeps neutral 0 prints white for readability
   };
 
   const formatCategory = (cat) => {
@@ -66,6 +81,16 @@ function App() {
     }
     return null;
   };
+
+  // Define this right above your return statement
+  const CATEGORY_ORDER = [
+      'ECONOMIC_GROWTH',
+      'JOB_MARKET',
+      'INFLATION',
+      'INSTITUTIONAL_ACTIVITY',
+      'CAPITAL_FLOWS',
+      'TECHNICALS'
+  ];
 
   return (
     <div style={styles.container}>
@@ -121,42 +146,50 @@ function App() {
         </div>
       )}
 
-      {/* 4. METRICS GRID */}
-      <div style={styles.grid}>
-        {Object.entries(summary.categoryScores).map(([category, catScore]) => (
-          <div key={category} style={styles.card}>
-            <div style={styles.cardHeader}>
-              <h2 style={styles.cardTitle}>{formatCategory(category)}</h2>
-              <span style={{...styles.catScoreBadge, color: getMetricScoreColor(catScore)}}>
-                {catScore > 0 ? '+' : ''}{catScore}
-              </span>
-            </div>
+        {/* 4. METRICS GRID */}
+        <div style={styles.grid}>
+          {CATEGORY_ORDER.map((category) => {
+            // Grab the score for this specific category from the backend summary
+            const catScore = summary.categoryScores[category];
 
-            <div style={styles.metricList}>
-              {summary.metrics
-                .filter(m => m.category === category)
-                .map(metric => (
-                  <div key={metric.name} style={styles.metricRow}>
-                    <div style={styles.metricName}>{metric.name}</div>
-                    <div style={styles.metricValues}>
-                      <span style={styles.actual}>
-                        Act: {Number(metric.actualValue).toFixed(2)}
-                      </span>
-                      {metric.forecastValue !== 0 && (
-                        <span style={styles.estimate}>
-                          Est: {Number(metric.forecastValue).toFixed(2)}
-                        </span>
-                      )}
-                    </div>
-                    <div style={{...styles.metricScore, color: getMetricScoreColor(metric.scoreDelta)}}>
-                      {metric.scoreDelta > 0 ? '+' : ''}{metric.scoreDelta}
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </div>
-        ))}
-      </div>
+            // If the backend hasn't returned this category yet, skip rendering the card
+            if (catScore === undefined) return null;
+
+            return (
+              <div key={category} style={styles.card}>
+                <div style={styles.cardHeader}>
+                  <h2 style={styles.cardTitle}>{formatCategory(category)}</h2>
+                  <span style={{...styles.catScoreBadge, color: getMetricScoreColor(catScore)}}>
+                    {catScore > 0 ? '+' : ''}{catScore}
+                  </span>
+                </div>
+
+                <div style={styles.metricList}>
+                  {summary.metrics
+                    .filter(m => m.category === category)
+                    .map(metric => (
+                      <div key={metric.name} style={styles.metricRow}>
+                        <div style={styles.metricName}>{metric.name}</div>
+                        <div style={styles.metricValues}>
+                          <span style={{ ...styles.actual, color: getActualValueColor(metric.scoreDelta) }}>
+                            Act: {Number(metric.actualValue).toFixed(2)}
+                          </span>
+                          {metric.forecastValue !== 0 && (
+                            <span style={styles.estimate}>
+                              Est: {Number(metric.forecastValue).toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{...styles.metricScore, color: getMetricScoreColor(metric.scoreDelta)}}>
+                          {metric.scoreDelta > 0 ? '+' : ''}{metric.scoreDelta}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
     </div>
   )
 }

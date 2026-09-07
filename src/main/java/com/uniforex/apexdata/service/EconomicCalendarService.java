@@ -1,10 +1,13 @@
 package com.uniforex.apexdata.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.uniforex.apexdata.MarketDataClient;
 import com.uniforex.apexdata.model.MarketMetric;
 import com.uniforex.apexdata.model.MetricCategory;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -13,98 +16,120 @@ import java.util.Map;
 
 public class EconomicCalendarService {
 
-    private final MarketDataClient client;
-    private final ObjectMapper mapper;
-
-    // The API key is no longer needed for this free public feed!
     public EconomicCalendarService(MarketDataClient client, ObjectMapper mapper, String apiKey) {
-        this.client = client;
-        this.mapper = mapper;
+        // Dependencies maintained for constructor compatibility
     }
 
     public List<MarketMetric> fetchLiveCalendarEvents() throws Exception {
-
-        // 1. Fetch the live, public JSON calendar feed from Forex Factory
-        String endpoint = "https://nfs.faireconomy.media/ff_calendar_thisweek.json";
-        String jsonResponse = client.fetchRawJson(endpoint);
-
-        // Map it to a generic list of maps since the Forex Factory structure is flat
-        List<Map<String, String>> events = mapper.readValue(jsonResponse, new TypeReference<List<Map<String, String>>>() {});
         Map<String, MarketMetric> uniqueMetrics = new HashMap<>();
 
-        for (Map<String, String> e : events) {
+        String scraperApiKey = "b7948d09ce26ef33bd811331e4bffbbc";
+        String targetUrl = "https://www.forexfactory.com/calendar";
+        String proxyUrl = "http://api.scraperapi.com?api_key=" + scraperApiKey + "&url=" + targetUrl;
 
-            // 2. Filter for US Dollar events only
-            String country = e.get("country");
-            if (!"USD".equalsIgnoreCase(country)) {
+        System.out.println("[SYSTEM] Attempting calendar fetch via ScraperAPI...");
+
+        // ScraperAPI handles proxy rotation internally, so we only need one connection attempt
+        Document doc = Jsoup.connect(proxyUrl)
+                .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                .header("Accept-Language", "en-US,en;q=0.9")
+                .timeout(60000) // 60-second timeout to give the residential proxy time to solve Cloudflare
+                .ignoreContentType(true)
+                .get();
+
+        // Throw an exception if the payload is empty so the scheduler handles it gracefully
+        if (doc == null || doc.selectFirst("tr.calendar__row") == null) {
+            throw new Exception("ScraperAPI failed to load the calendar or timed out.");
+        }
+
+        System.out.println("[SYSTEM] Successfully connected and retrieved HTML via ScraperAPI.");
+
+        // Scrape the HTML payload
+        Elements rows = doc.select("tr.calendar__row");
+
+        for (Element row : rows) {
+            Element currencyElem = row.selectFirst("td.calendar__currency");
+            if (currencyElem == null || !"USD".equalsIgnoreCase(currencyElem.text().trim())) {
                 continue;
             }
 
-            String eventName = e.get("title");
-            String actualStr = e.get("actual");
-            String forecastStr = e.get("forecast");
+            Element eventElem = row.selectFirst("td.calendar__event span");
+            Element actualElem = row.selectFirst("td.calendar__actual");
+            Element forecastElem = row.selectFirst("td.calendar__forecast");
 
-            // Skip events that haven't happened yet or have no estimate
-            if (actualStr == null || actualStr.isEmpty() || forecastStr == null || forecastStr.isEmpty()) {
+            if (eventElem == null || actualElem == null || forecastElem == null) {
                 continue;
             }
 
-            double actual = parseValue(actualStr);
-            double estimate = parseValue(forecastStr);
+            String eventTitle = eventElem.text().trim().toLowerCase();
+            String actualText = actualElem.text().trim();
+            String forecastText = forecastElem.text().trim();
 
-            // 3. Map Forex Factory titles to your ApexData Engine naming conventions
-            if (eventName.contains("Non-Farm Employment")) {
-                uniqueMetrics.put("NFP (Jobs)", new MarketMetric("NFP (Jobs)", actual, estimate, 0, MetricCategory.JOB_MARKET));
-            } else if (eventName.contains("Unemployment Rate")) {
-                uniqueMetrics.put("Unemployment Rate", new MarketMetric("Unemployment Rate", actual, estimate, 0, MetricCategory.JOB_MARKET));
-            } else if (eventName.contains("Retail Sales m/m") || eventName.contains("Core Retail Sales m/m")) {
-                uniqueMetrics.put("Retail Sales (MoM)", new MarketMetric("Retail Sales (MoM)", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
-            } else if (eventName.contains("Unemployment Claims")) {
-                uniqueMetrics.put("Initial Jobless Claims", new MarketMetric("Initial Jobless Claims", actual, estimate, 0, MetricCategory.JOB_MARKET));
-            } else if (eventName.contains("PPI m/m") || eventName.contains("Core PPI m/m")) {
-                uniqueMetrics.put("PPI (MoM)", new MarketMetric("PPI (MoM)", actual, estimate, 0, MetricCategory.INFLATION));
-            } else if (eventName.contains("Average Hourly Earnings")) {
-                uniqueMetrics.put("Wage Growth (MoM)", new MarketMetric("Wage Growth (MoM)", actual, estimate, 0, MetricCategory.INFLATION));
-            } else if (eventName.contains("Core PCE")) {
-                uniqueMetrics.put("Core PCE (MoM)", new MarketMetric("Core PCE (MoM)", actual, estimate, 0, MetricCategory.INFLATION));
-            } else if (eventName.contains("Industrial Production")) {
-                uniqueMetrics.put("Industrial Production", new MarketMetric("Industrial Production", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
-            } else if (eventName.contains("CB Consumer Confidence") || eventName.contains("UoM Consumer Sentiment")) {
-                uniqueMetrics.put("Consumer Sentiment", new MarketMetric("Consumer Sentiment", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
-            } else if (eventName.contains("ISM Manufacturing PMI")) {
-                uniqueMetrics.put("Manufacturing PMI", new MarketMetric("Manufacturing PMI", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
-            } else if (eventName.contains("ISM Services PMI")) {
-                uniqueMetrics.put("Services PMI", new MarketMetric("Services PMI", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
-            } else if (eventName.contains("JOLTS Job Openings")) {
-                uniqueMetrics.put("JOLTS Job Openings", new MarketMetric("JOLTS Job Openings", actual, estimate, 0, MetricCategory.JOB_MARKET));
-            } else if (eventName.contains("ADP Non-Farm")) {
+            if (actualText.isEmpty() || forecastText.isEmpty()) {
+                continue;
+            }
+
+            double actual = parseValue(actualText);
+            double estimate = parseValue(forecastText);
+
+// 1. Check for ADP FIRST to prevent shadowing
+            if (eventTitle.contains("adp")) {
                 uniqueMetrics.put("ADP Private Employment", new MarketMetric("ADP Private Employment", actual, estimate, 0, MetricCategory.JOB_MARKET));
-            } else if (eventName.contains("CPI y/y") || eventName.contains("CPI m/m")) {
+
+                // 2. Now it is safe to check for standard NFP
+            } else if (eventTitle.contains("non-farm employment") || eventTitle.contains("nfp")) {
+                uniqueMetrics.put("NFP (Jobs)", new MarketMetric("NFP (Jobs)", actual, estimate, 0, MetricCategory.JOB_MARKET));
+
+            } else if (eventTitle.contains("unemployment rate")) {
+                uniqueMetrics.put("Unemployment Rate", new MarketMetric("Unemployment Rate", actual, estimate, 0, MetricCategory.JOB_MARKET));
+            } else if (eventTitle.contains("retail sales") || eventTitle.contains("core retail sales")) {
+                uniqueMetrics.put("Retail Sales (MoM)", new MarketMetric("Retail Sales (MoM)", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
+            } else if (eventTitle.contains("unemployment claims")) {
+                uniqueMetrics.put("Initial Jobless Claims", new MarketMetric("Initial Jobless Claims", actual, estimate, 0, MetricCategory.JOB_MARKET));
+            } else if (eventTitle.contains("ppi") || eventTitle.contains("core ppi")) {
+                uniqueMetrics.put("PPI (MoM)", new MarketMetric("PPI (MoM)", actual, estimate, 0, MetricCategory.INFLATION));
+            } else if (eventTitle.contains("average hourly earnings")) {
+                uniqueMetrics.put("Wage Growth (MoM)", new MarketMetric("Wage Growth (MoM)", actual, estimate, 0, MetricCategory.INFLATION));
+            } else if (eventTitle.contains("core pce")) {
+                uniqueMetrics.put("Core PCE (MoM)", new MarketMetric("Core PCE (MoM)", actual, estimate, 0, MetricCategory.INFLATION));
+            } else if (eventTitle.contains("industrial production")) {
+                uniqueMetrics.put("Industrial Production", new MarketMetric("Industrial Production", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
+            } else if (eventTitle.contains("consumer sentiment") || eventTitle.contains("consumer confidence")) {
+                uniqueMetrics.put("Consumer Sentiment", new MarketMetric("Consumer Sentiment", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
+            } else if (eventTitle.contains("manufacturing pmi")) {
+                uniqueMetrics.put("Manufacturing PMI", new MarketMetric("Manufacturing PMI", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
+            } else if (eventTitle.contains("services pmi")) {
+                uniqueMetrics.put("Services PMI", new MarketMetric("Services PMI", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
+            } else if (eventTitle.contains("jolts job openings")) {
+                uniqueMetrics.put("JOLTS Job Openings", new MarketMetric("JOLTS Job Openings", actual, estimate, 0, MetricCategory.JOB_MARKET));
+            } else if (eventTitle.contains("cpi")) {
                 uniqueMetrics.put("YoY Inflation", new MarketMetric("YoY Inflation", actual, estimate, 0, MetricCategory.INFLATION));
-            } else if (eventName.contains("Advance GDP q/q")) {
+            } else if (eventTitle.contains("gdp")) {
                 uniqueMetrics.put("Real GDP", new MarketMetric("Real GDP", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
             }
         }
+
         return new ArrayList<>(uniqueMetrics.values());
     }
 
-    // Helper method to strip strings (e.g. "4.1%", "85K", "-0.1M") into pure doubles
     private double parseValue(String val) {
-        val = val.replaceAll(",", "").trim();
+        val = val.replaceAll("<[^>]*>", "").replaceAll("[,%]", "").trim();
         double multiplier = 1.0;
+        String lowerVal = val.toLowerCase();
 
-        if (val.endsWith("%")) {
-            val = val.replace("%", "");
-        } else if (val.endsWith("K")) {
-            val = val.replace("K", "");
-        } else if (val.endsWith("M")) {
-            val = val.replace("M", "");
-        } else if (val.endsWith("B")) {
-            val = val.replace("B", "");
+        if (lowerVal.endsWith("k")) {
+            multiplier = 1000.0;
+            val = lowerVal.replace("k", "");
+        } else if (lowerVal.endsWith("m")) {
+            multiplier = 1000000.0;
+            val = lowerVal.replace("m", "");
+        } else if (lowerVal.endsWith("b")) {
+            multiplier = 1000000000.0;
+            val = lowerVal.replace("b", "");
         }
 
         try {
-            return Double.parseDouble(val) * multiplier;
+            return Double.parseDouble(val.trim()) * multiplier;
         } catch (NumberFormatException e) {
             return 0.0;
         }
