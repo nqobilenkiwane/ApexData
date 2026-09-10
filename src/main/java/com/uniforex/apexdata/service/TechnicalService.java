@@ -3,138 +3,112 @@ package com.uniforex.apexdata.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.uniforex.apexdata.MarketDataClient;
+import org.springframework.stereotype.Service;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.BaseBarSeriesBuilder;
 import org.ta4j.core.indicators.RSIIndicator;
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
 
-import java.time.LocalDate;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 
+@Service
 public class TechnicalService {
 
     private final MarketDataClient client;
     private final ObjectMapper mapper;
-    private final String apiKey;
 
-    public TechnicalService(MarketDataClient client, ObjectMapper mapper, String apiKey) {
+    // Removed the API key requirement completely
+    public TechnicalService(MarketDataClient client, ObjectMapper mapper) {
         this.client = client;
         this.mapper = mapper;
-        this.apiKey = apiKey;
     }
 
-    // Existing DTO for USD (includes Macro Yields)
-    public record TechnicalData(double currentPrice, double sma200, double rsi14, double yield2Y, double yield10Y) {}
-
-    // New lightweight DTO strictly for Asset Technicals (Yields are handled in the Macro baseline)
-    public record AssetTechnicalData(double currentPrice, double sma200, double rsi14) {}
-
-    public TechnicalData fetchUsdTechnicals() throws Exception {
-        // 1. Fetch Treasury Yields
-        double yield2Y = fetchLatestYield("2year");
-        double yield10Y = fetchLatestYield("10year");
-
-        // 2. Fetch USD/EUR daily prices
-        BarSeries series = fetchAlphaVantageFxSeries("USD", "EUR");
-
-        ClosePriceIndicator closePrice = new ClosePriceIndicator(series);
-        SMAIndicator sma200 = new SMAIndicator(closePrice, 200);
-        RSIIndicator rsi14 = new RSIIndicator(closePrice, 14);
-
-        int endIndex = series.getEndIndex();
-
-        return new TechnicalData(
-                closePrice.getValue(endIndex).doubleValue(),
-                sma200.getValue(endIndex).doubleValue(),
-                rsi14.getValue(endIndex).doubleValue(),
-                yield2Y,
-                yield10Y
-        );
-    }
-
-    /**
-     * Fetches technical momentum specifically for Gold (XAU/USD).
-     */
-    public AssetTechnicalData fetchGoldTechnicals() throws Exception {
-        // Alpha Vantage treats physical Gold (XAU) as a currency in the FX endpoint
-        BarSeries series = fetchAlphaVantageFxSeries("XAU", "USD");
-
-        ClosePriceIndicator closePrice = new ClosePriceIndicator(series);
-        SMAIndicator sma200 = new SMAIndicator(closePrice, 200);
-        RSIIndicator rsi14 = new RSIIndicator(closePrice, 14);
-
-        int endIndex = series.getEndIndex();
-
-        return new AssetTechnicalData(
-                closePrice.getValue(endIndex).doubleValue(),
-                sma200.getValue(endIndex).doubleValue(),
-                rsi14.getValue(endIndex).doubleValue()
-        );
-    }
-
-    // ========================================================================
-    // HELPER METHODS
-    // ========================================================================
-
-    /**
-     * Reusable helper method to fetch and build a ta4j BarSeries for any FX pair.
-     * Prevents code duplication between the USD and Gold technical endpoints.
-     */
-    private BarSeries fetchAlphaVantageFxSeries(String fromSymbol, String toSymbol) throws Exception {
-        String url = String.format(
-                "https://www.alphavantage.co/query?function=FX_DAILY&from_symbol=%s&to_symbol=%s&outputsize=full&apikey=%s",
-                fromSymbol, toSymbol, apiKey
-        );
-
-        String json = client.fetchRawJson(url);
-        JsonNode rootNode = mapper.readTree(json);
-        JsonNode timeSeriesNode = rootNode.get("Time Series FX (Daily)");
-
-        if (timeSeriesNode == null) {
-            throw new RuntimeException("Failed to fetch " + fromSymbol + "/" + toSymbol + " data. Check API key or rate limits.");
-        }
-
-        List<String> dates = new ArrayList<>();
-        timeSeriesNode.fieldNames().forEachRemaining(dates::add);
-        Collections.sort(dates);
-
-        BarSeries series = new BaseBarSeriesBuilder().withName(fromSymbol + "_" + toSymbol).build();
-
-        for (String dateString : dates) {
-            JsonNode dailyNode = timeSeriesNode.get(dateString);
-            double open = dailyNode.get("1. open").asDouble();
-            double high = dailyNode.get("2. high").asDouble();
-            double low = dailyNode.get("3. low").asDouble();
-            double close = dailyNode.get("4. close").asDouble();
-
-            LocalDate date = LocalDate.parse(dateString);
-            ZonedDateTime zdt = date.atStartOfDay(ZoneId.of("UTC"));
-            series.addBar(zdt, open, high, low, close, 0.0);
-        }
-        return series;
-    }
-
-    private double fetchLatestYield(String maturity) {
+    public TechnicalData fetchUsdTechnicals() {
         try {
-            String url = String.format("https://www.alphavantage.co/query?function=TREASURY_YIELD&interval=daily&maturity=%s&apikey=%s", maturity, apiKey);
-            String json = client.fetchRawJson(url);
-            JsonNode rootNode = mapper.readTree(json);
-            JsonNode dataNode = rootNode.get("data");
+            // 1. Fetch DXY (US Dollar Index) Technicals
+            AssetTechnicalData dxy = fetchSeriesAndCalculateMetrics("DX-Y.NYB");
 
-            if (dataNode != null && dataNode.isArray() && dataNode.size() > 0) {
-                String val = dataNode.get(0).get("value").asText();
-                if (!".".equals(val)) {
-                    return Double.parseDouble(val);
-                }
-            }
+            // 2. Fetch US Treasury Yields (Current price only needed for yields)
+            // ^TNX is quoted as Yield * 10 (e.g., 43.9 = 4.39%)
+            double yield10Y = fetchCurrentPrice("^TNX") / 10.0;
+
+            // Using 13-week IRX as short-end proxy (can swap to ^FVX for 5-year)
+            double yield2Y = fetchCurrentPrice("^IRX") / 10.0;
+
+            return new TechnicalData(dxy.currentPrice(), dxy.sma200(), dxy.rsi14(), yield10Y, yield2Y);
         } catch (Exception e) {
-            System.err.println("[API Error] Failed to fetch " + maturity + " yield: " + e.getMessage());
+            throw new RuntimeException("Failed to fetch USD technicals from Yahoo Finance.", e);
+        }
+    }
+
+    public AssetTechnicalData fetchGoldTechnicals() {
+        try {
+            return fetchSeriesAndCalculateMetrics("XAUUSD=X");
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to fetch XAU/USD data from Yahoo Finance.", e);
+        }
+    }
+
+    /**
+     * Generic fetcher for any Yahoo Finance ticker.
+     * Replaces the old Alpha Vantage daily FX fetcher.
+     */
+    private AssetTechnicalData fetchSeriesAndCalculateMetrics(String ticker) throws Exception {
+        String url = "https://query1.finance.yahoo.com/v8/finance/chart/" + ticker + "?range=1y&interval=1d";
+        String response = client.fetchRawJson(url);
+        JsonNode root = mapper.readTree(response);
+        JsonNode result = root.path("chart").path("result").get(0);
+
+        JsonNode timestamps = result.path("timestamp");
+        JsonNode quote = result.path("indicators").path("quote").get(0);
+        JsonNode closes = quote.path("close");
+
+        BarSeries series = new BaseBarSeriesBuilder().withName(ticker).build();
+
+        // Yahoo Finance uses flat arrays. We iterate chronologically to build the ta4j series.
+        for (int i = 0; i < timestamps.size(); i++) {
+            // Yahoo occasionally returns null values for market half-days or glitches
+            if (!closes.get(i).isNull()) {
+                long time = timestamps.get(i).asLong();
+                ZonedDateTime zdt = ZonedDateTime.ofInstant(Instant.ofEpochSecond(time), ZoneId.of("UTC"));
+                double close = closes.get(i).asDouble();
+
+                // Using close price for all OHLC fields since we only calculate Close-based SMA/RSI
+                series.addBar(zdt, close, close, close, close, 0);
+            }
+        }
+
+        ClosePriceIndicator closePrice = new ClosePriceIndicator(series);
+        SMAIndicator sma200 = new SMAIndicator(closePrice, 200);
+        RSIIndicator rsi14 = new RSIIndicator(closePrice, 14);
+
+        int lastIndex = series.getEndIndex();
+        return new AssetTechnicalData(
+                closePrice.getValue(lastIndex).doubleValue(),
+                sma200.getValue(lastIndex).doubleValue(),
+                rsi14.getValue(lastIndex).doubleValue()
+        );
+    }
+
+    /**
+     * Lightweight fetcher for yields where we don't need 200 days of history.
+     */
+    private double fetchCurrentPrice(String ticker) throws Exception {
+        String url = "https://query1.finance.yahoo.com/v8/finance/chart/" + ticker + "?range=1d&interval=1d";
+        String response = client.fetchRawJson(url);
+        JsonNode root = mapper.readTree(response);
+        JsonNode closes = root.path("chart").path("result").get(0).path("indicators").path("quote").get(0).path("close");
+
+        // Return the most recent non-null close price
+        for (int i = closes.size() - 1; i >= 0; i--) {
+            if (!closes.get(i).isNull()) return closes.get(i).asDouble();
         }
         return 0.0;
     }
+
+    public record TechnicalData(double currentPrice, double sma200, double rsi14, double yield10Y, double yield2Y) {}
+    public record AssetTechnicalData(double currentPrice, double sma200, double rsi14) {}
 }

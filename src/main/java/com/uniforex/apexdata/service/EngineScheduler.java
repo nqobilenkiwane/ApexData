@@ -10,7 +10,6 @@ import com.uniforex.apexdata.model.entity.CalendarEventEntity;
 import com.uniforex.apexdata.model.entity.HistoricalScoreEntity;
 import com.uniforex.apexdata.repository.CalendarEventRepository;
 import com.uniforex.apexdata.repository.HistoricalScoreRepository;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -40,8 +39,7 @@ public class EngineScheduler {
     public EngineScheduler(
             CalendarEventRepository calendarRepo,
             HistoricalScoreRepository historyRepo,
-            DashboardStateService stateService,
-            @Value("${ALPHA_VANTAGE_API_KEY}") String alphaApiKey) {
+            DashboardStateService stateService) {
 
         this.calendarRepo = calendarRepo;
         this.historyRepo = historyRepo;
@@ -52,7 +50,7 @@ public class EngineScheduler {
         this.engine = new CompositeScoringEngine();
 
         this.cftcService = new CftcService(client, mapper);
-        this.technicalService = new TechnicalService(client, mapper, alphaApiKey);
+        this.technicalService = new TechnicalService(client, mapper);
         this.calendarService = new EconomicCalendarService(client, mapper, null);
     }
 
