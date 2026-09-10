@@ -5,7 +5,9 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import org.springframework.stereotype.Component;
 
+@Component
 public class MarketDataClient {
 
     private final HttpClient httpClient;
