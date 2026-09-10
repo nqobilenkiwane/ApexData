@@ -46,7 +46,7 @@ public class TechnicalService {
 
     public AssetTechnicalData fetchGoldTechnicals() {
         try {
-            return fetchSeriesAndCalculateMetrics("XAUUSD=X");
+            return fetchSeriesAndCalculateMetrics("GC=F");
         } catch (Exception e) {
             throw new RuntimeException("Failed to fetch XAU/USD data from Yahoo Finance.", e);
         }
