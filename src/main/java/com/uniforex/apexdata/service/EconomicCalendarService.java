@@ -19,7 +19,6 @@ public class EconomicCalendarService {
     public EconomicCalendarService(MarketDataClient client, ObjectMapper mapper, String apiKey) {
         this.client = client;
         this.mapper = mapper;
-        // apiKey is ignored, constructor signature maintained for EngineScheduler
     }
 
     public List<MarketMetric> fetchLiveCalendarEvents() throws Exception {
@@ -27,7 +26,6 @@ public class EconomicCalendarService {
 
         System.out.println("[SYSTEM] Attempting calendar fetch via ForexFactory Public JSON CDN...");
 
-        // Official ForexFactory widget CDN. No API keys, no Cloudflare blocks.
         String url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json";
 
         String response = client.fetchRawJson(url);
@@ -46,18 +44,17 @@ public class EconomicCalendarService {
 
             String title = node.path("title").asText("").toLowerCase();
 
-            // The JSON returns strings with '%' or 'K'/'M'/'B', requiring your custom parser
             String actualText = node.path("actual").asText("");
             String forecastText = node.path("forecast").asText("");
 
-            if (actualText.isEmpty() && forecastText.isEmpty()) {
+            // CRITICAL FIX: Reverted to || to prevent upcoming events from overwriting the DB with 0.0
+            if (actualText.isEmpty() || forecastText.isEmpty()) {
                 continue;
             }
 
             double actual = parseValue(actualText);
             double estimate = parseValue(forecastText);
 
-            // Standard routing logic
             if (title.contains("adp")) {
                 uniqueMetrics.put("ADP Private Employment", new MarketMetric("ADP Private Employment", actual, estimate, 0, MetricCategory.JOB_MARKET));
             } else if (title.contains("nonfarm") || title.contains("non-farm employment") || title.contains("nfp")) {
