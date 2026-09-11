@@ -1,18 +1,11 @@
 package com.uniforex.apexdata.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.uniforex.apexdata.MarketDataClient;
 import com.uniforex.apexdata.model.MarketMetric;
 import com.uniforex.apexdata.model.MetricCategory;
 
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.w3c.dom.NodeList;
-
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -20,54 +13,51 @@ import java.util.Map;
 
 public class EconomicCalendarService {
 
+    private final MarketDataClient client;
+    private final ObjectMapper mapper;
+
     public EconomicCalendarService(MarketDataClient client, ObjectMapper mapper, String apiKey) {
-        // Dependencies maintained for constructor compatibility in EngineScheduler
+        this.client = client;
+        this.mapper = mapper;
+        // apiKey is ignored, constructor signature maintained for EngineScheduler
     }
 
     public List<MarketMetric> fetchLiveCalendarEvents() throws Exception {
         Map<String, MarketMetric> uniqueMetrics = new HashMap<>();
 
-        System.out.println("[SYSTEM] Attempting calendar fetch via Myfxbook XML Feed...");
+        System.out.println("[SYSTEM] Attempting calendar fetch via ForexFactory Public JSON CDN...");
 
-        // 1. Establish a browser-like connection to bypass 403 blocks
-        URL url = new URL("https://www.myfxbook.com/rss/forex-economic-calendar-events");
-        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-        connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
-        connection.setRequestMethod("GET");
+        // Official ForexFactory widget CDN. No API keys, no Cloudflare blocks.
+        String url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json";
 
-        // 2. Parse the XML stream using native Java libraries
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        DocumentBuilder builder = factory.newDocumentBuilder();
-        Document doc = builder.parse(connection.getInputStream());
-        doc.getDocumentElement().normalize();
+        String response = client.fetchRawJson(url);
+        JsonNode events = mapper.readTree(response);
 
-        NodeList itemList = doc.getElementsByTagName("item");
-
-        if (itemList.getLength() == 0) {
-            throw new Exception("Myfxbook feed returned no events.");
+        if (events.isMissingNode() || !events.isArray()) {
+            throw new Exception("ForexFactory CDN returned invalid data.");
         }
 
-        for (int i = 0; i < itemList.getLength(); i++) {
-            Element item = (Element) itemList.item(i);
+        for (JsonNode node : events) {
+            String country = node.path("country").asText("");
 
-            String title = item.getElementsByTagName("title").item(0).getTextContent().toLowerCase();
-            String description = item.getElementsByTagName("description").item(0).getTextContent().toLowerCase();
-
-            // Filter for USD events only
-            if (!title.contains("usd")) {
+            if (!"USD".equalsIgnoreCase(country)) {
                 continue;
             }
 
-            // Extract values using basic string parsing since RSS descriptions are plain text
-            double actual = extractValueFromDescription(description, "actual:");
-            double estimate = extractValueFromDescription(description, "consensus:");
+            String title = node.path("title").asText("").toLowerCase();
 
-            // Skip zeroed-out lines for events that haven't happened and lack estimates
-            if (actual == 0.0 && estimate == 0.0) {
+            // The JSON returns strings with '%' or 'K'/'M'/'B', requiring your custom parser
+            String actualText = node.path("actual").asText("");
+            String forecastText = node.path("forecast").asText("");
+
+            if (actualText.isEmpty() && forecastText.isEmpty()) {
                 continue;
             }
 
-            // Route to specific scorecards
+            double actual = parseValue(actualText);
+            double estimate = parseValue(forecastText);
+
+            // Standard routing logic
             if (title.contains("adp")) {
                 uniqueMetrics.put("ADP Private Employment", new MarketMetric("ADP Private Employment", actual, estimate, 0, MetricCategory.JOB_MARKET));
             } else if (title.contains("nonfarm") || title.contains("non-farm employment") || title.contains("nfp")) {
@@ -101,27 +91,30 @@ public class EconomicCalendarService {
             }
         }
 
-        System.out.println("[SYSTEM] Successfully connected and retrieved XML via Myfxbook RSS.");
+        System.out.println("[SYSTEM] Successfully connected and retrieved JSON via ForexFactory CDN.");
         return new ArrayList<>(uniqueMetrics.values());
     }
 
-    private double extractValueFromDescription(String description, String key) {
-        int index = description.indexOf(key);
-        if (index == -1) return 0.0;
+    private double parseValue(String val) {
+        if (val == null || val.isEmpty()) return 0.0;
 
-        String sub = description.substring(index + key.length());
-        String[] parts = sub.split("[,|<]"); // Handles commas, pipes, or HTML tags if present
-        String rawVal = parts[0].toLowerCase();
-        String valStr = rawVal.replaceAll("[^0-9.-]", "").trim();
-
-        // Reintroduce your multiplier logic for K, M, and B
+        val = val.replaceAll("<[^>]*>", "").replaceAll("[,%]", "").trim();
         double multiplier = 1.0;
-        if (rawVal.contains("k")) multiplier = 1000.0;
-        else if (rawVal.contains("m")) multiplier = 1000000.0;
-        else if (rawVal.contains("b")) multiplier = 1000000000.0;
+        String lowerVal = val.toLowerCase();
+
+        if (lowerVal.endsWith("k")) {
+            multiplier = 1000.0;
+            val = lowerVal.replace("k", "");
+        } else if (lowerVal.endsWith("m")) {
+            multiplier = 1000000.0;
+            val = lowerVal.replace("m", "");
+        } else if (lowerVal.endsWith("b")) {
+            multiplier = 1000000000.0;
+            val = lowerVal.replace("b", "");
+        }
 
         try {
-            return valStr.isEmpty() ? 0.0 : Double.parseDouble(valStr) * multiplier;
+            return Double.parseDouble(val.trim()) * multiplier;
         } catch (NumberFormatException e) {
             return 0.0;
         }
