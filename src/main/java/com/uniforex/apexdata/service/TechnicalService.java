@@ -20,7 +20,6 @@ public class TechnicalService {
     private final MarketDataClient client;
     private final ObjectMapper mapper;
 
-    // Removed the API key requirement completely
     public TechnicalService(MarketDataClient client, ObjectMapper mapper) {
         this.client = client;
         this.mapper = mapper;
@@ -28,15 +27,12 @@ public class TechnicalService {
 
     public TechnicalData fetchUsdTechnicals() {
         try {
-            // 1. Fetch DXY (US Dollar Index) Technicals
-            AssetTechnicalData dxy = fetchSeriesAndCalculateMetrics("DX-Y.NYB");
+            // Swap to DX=F (US Dollar Index Futures) to avoid Yahoo's DX-Y.NYB 500 errors
+            AssetTechnicalData dxy = fetchSeriesAndCalculateMetrics("DX=F");
 
-            // 2. Fetch US Treasury Yields (Current price only needed for yields)
-            // ^TNX is quoted as Yield * 10 (e.g., 43.9 = 4.39%)
-            double yield10Y = fetchCurrentPrice("^TNX") / 10.0;
-
-            // Using 13-week IRX as short-end proxy (can swap to ^FVX for 5-year)
-            double yield2Y = fetchCurrentPrice("^IRX") / 10.0;
+            // Removed the / 10.0 division since Yahoo now quotes exact percentages
+            double yield10Y = fetchCurrentPrice("^TNX");
+            double yield2Y = fetchCurrentPrice("^IRX");
 
             return new TechnicalData(dxy.currentPrice(), dxy.sma200(), dxy.rsi14(), yield10Y, yield2Y);
         } catch (Exception e) {
@@ -52,10 +48,6 @@ public class TechnicalService {
         }
     }
 
-    /**
-     * Generic fetcher for any Yahoo Finance ticker.
-     * Replaces the old Alpha Vantage daily FX fetcher.
-     */
     private AssetTechnicalData fetchSeriesAndCalculateMetrics(String ticker) throws Exception {
         String url = "https://query1.finance.yahoo.com/v8/finance/chart/" + ticker + "?range=1y&interval=1d";
         String response = client.fetchRawJson(url);
@@ -68,15 +60,11 @@ public class TechnicalService {
 
         BarSeries series = new BaseBarSeriesBuilder().withName(ticker).build();
 
-        // Yahoo Finance uses flat arrays. We iterate chronologically to build the ta4j series.
         for (int i = 0; i < timestamps.size(); i++) {
-            // Yahoo occasionally returns null values for market half-days or glitches
             if (!closes.get(i).isNull()) {
                 long time = timestamps.get(i).asLong();
                 ZonedDateTime zdt = ZonedDateTime.ofInstant(Instant.ofEpochSecond(time), ZoneId.of("UTC"));
                 double close = closes.get(i).asDouble();
-
-                // Using close price for all OHLC fields since we only calculate Close-based SMA/RSI
                 series.addBar(zdt, close, close, close, close, 0);
             }
         }
@@ -93,16 +81,12 @@ public class TechnicalService {
         );
     }
 
-    /**
-     * Lightweight fetcher for yields where we don't need 200 days of history.
-     */
     private double fetchCurrentPrice(String ticker) throws Exception {
         String url = "https://query1.finance.yahoo.com/v8/finance/chart/" + ticker + "?range=1d&interval=1d";
         String response = client.fetchRawJson(url);
         JsonNode root = mapper.readTree(response);
         JsonNode closes = root.path("chart").path("result").get(0).path("indicators").path("quote").get(0).path("close");
 
-        // Return the most recent non-null close price
         for (int i = closes.size() - 1; i >= 0; i--) {
             if (!closes.get(i).isNull()) return closes.get(i).asDouble();
         }
