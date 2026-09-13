@@ -33,8 +33,7 @@ function App() {
         setGoldSummary(goldData);
 
         if (Array.isArray(historyData)) {
-          const usdHistory = historyData.filter(item => item.currency === 'USD' || !item.currency);
-          const formattedHistory = usdHistory.map(item => ({
+          const formattedHistory = historyData.map(item => ({
             ...item,
             displayDate: new Date(item.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
           }));
@@ -122,6 +121,10 @@ function App() {
     ];
   }
 
+  const activeHistory = history.filter(item =>
+    isGold ? item.currency === 'XAU' : (item.currency === 'USD' || !item.currency)
+  );
+
   return (
     <div style={styles.container}>
       <header style={styles.header}>
@@ -166,15 +169,15 @@ function App() {
         </div>
       </header>
 
-      {/* HISTORICAL TREND CHART (Leaving as is per instructions) */}
-      {history.length > 0 && (
+      {/* HISTORICAL TREND CHART */}
+      {activeHistory.length > 0 && (
         <div style={styles.chartSection}>
           <div style={styles.cardHeader}>
-            <h2 style={styles.cardTitle}>USD MACRO TREND</h2>
+            <h2 style={styles.cardTitle}>{isGold ? 'GOLD MACRO TREND' : 'USD MACRO TREND'}</h2>
           </div>
           <div style={styles.chartWrapper}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={history} margin={{ top: 10, right: 10, left: -20, bottom: 0 }} barCategoryGap="10%">
+              <BarChart data={activeHistory} margin={{ top: 10, right: 10, left: -20, bottom: 0 }} barCategoryGap="10%">
                 <CartesianGrid strokeDasharray="3 3" stroke="#222222" vertical={false} />
                 <XAxis dataKey="displayDate" stroke="#888888" tick={{ fill: '#888888', fontSize: 12 }} tickMargin={10} />
                 <YAxis stroke="#888888" tick={{ fill: '#888888', fontSize: 12 }} domain={[-22, 22]} />
@@ -191,46 +194,48 @@ function App() {
         </div>
       )}
 
-      {/* METRICS GRID (Leaving as is per instructions) */}
-      <div style={styles.grid}>
-        {CATEGORY_ORDER.map((category) => {
-          const catScore = summary.categoryScores[category];
-          if (catScore === undefined) return null;
+      {/* METRICS GRID - Hidden for Gold until specific Gold metrics are added */}
+      {!isGold && (
+        <div style={styles.grid}>
+          {CATEGORY_ORDER.map((category) => {
+            const catScore = summary.categoryScores[category];
+            if (catScore === undefined) return null;
 
-          return (
-            <div key={category} style={styles.card}>
-              <div style={styles.cardHeader}>
-                <h2 style={styles.cardTitle}>{formatCategory(category)}</h2>
-                <span style={{...styles.catScoreBadge, color: getMetricScoreColor(catScore)}}>
-                  {catScore > 0 ? '+' : ''}{catScore}
-                </span>
-              </div>
-              <div style={styles.metricList}>
-                {summary.metrics
-                  .filter(m => m.category === category)
-                  .map(metric => (
-                    <div key={metric.name} style={styles.metricRow}>
-                      <div style={styles.metricName}>{metric.name}</div>
-                      <div style={styles.metricValues}>
-                        <span style={{ ...styles.actual, color: getActualValueColor(metric.scoreDelta) }}>
-                          Act: {Number(metric.actualValue).toFixed(2)}
-                        </span>
-                        {metric.forecastValue !== 0 && (
-                          <span style={styles.estimate}>
-                            Est: {Number(metric.forecastValue).toFixed(2)}
+            return (
+              <div key={category} style={styles.card}>
+                <div style={styles.cardHeader}>
+                  <h2 style={styles.cardTitle}>{formatCategory(category)}</h2>
+                  <span style={{...styles.catScoreBadge, color: getMetricScoreColor(catScore)}}>
+                    {catScore > 0 ? '+' : ''}{catScore}
+                  </span>
+                </div>
+                <div style={styles.metricList}>
+                  {summary.metrics
+                    .filter(m => m.category === category)
+                    .map(metric => (
+                      <div key={metric.name} style={styles.metricRow}>
+                        <div style={styles.metricName}>{metric.name}</div>
+                        <div style={styles.metricValues}>
+                          <span style={{ ...styles.actual, color: getActualValueColor(metric.scoreDelta) }}>
+                            Act: {Number(metric.actualValue).toFixed(2)}
                           </span>
-                        )}
+                          {metric.forecastValue !== 0 && (
+                            <span style={styles.estimate}>
+                              Est: {Number(metric.forecastValue).toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{...styles.metricScore, color: getMetricScoreColor(metric.scoreDelta)}}>
+                          {metric.scoreDelta > 0 ? '+' : ''}{metric.scoreDelta}
+                        </div>
                       </div>
-                      <div style={{...styles.metricScore, color: getMetricScoreColor(metric.scoreDelta)}}>
-                        {metric.scoreDelta > 0 ? '+' : ''}{metric.scoreDelta}
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   )
 }
