@@ -1,32 +1,37 @@
 package com.uniforex.apexdata.service;
 
 import com.uniforex.apexdata.CompositeScoringEngine;
+import com.uniforex.apexdata.model.MetricCategory;
 import com.uniforex.apexdata.model.dto.DashboardSummaryResponse;
+import com.uniforex.apexdata.model.dto.GoldSummaryResponse; // Make sure you created this file
+import com.uniforex.apexdata.model.MarketMetric;
 import com.uniforex.apexdata.model.entity.HistoricalScoreEntity;
 import com.uniforex.apexdata.repository.HistoricalScoreRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 @Service
 public class DashboardStateService {
 
     private DashboardSummaryResponse latestSummary;
-    private AssetScoreResponse latestGoldSummary;
+    private GoldSummaryResponse latestGoldSummary; // Swapped to the new DTO
 
     @Autowired
     private HistoricalScoreRepository historicalScoreRepository;
 
-    // REMOVED THE @AUTOWIRED FIELDS HERE
-
     public DashboardSummaryResponse getLatestSummary() { return latestSummary; }
     public void setLatestSummary(DashboardSummaryResponse latestSummary) { this.latestSummary = latestSummary; }
-    public AssetScoreResponse getLatestGoldSummary() { return latestGoldSummary; }
-    public void setLatestGoldSummary(AssetScoreResponse latestGoldSummary) { this.latestGoldSummary = latestGoldSummary; }
+    public GoldSummaryResponse getLatestGoldSummary() { return latestGoldSummary; }
+    public void setLatestGoldSummary(GoldSummaryResponse latestGoldSummary) { this.latestGoldSummary = latestGoldSummary; }
 
     /**
      * Orchestrates the Gold fetching and scoring pipeline.
-     * Now accepts the services directly from the EngineScheduler.
      */
     public void updateGoldPipeline(CftcService cftcService, TechnicalService technicalService, CompositeScoringEngine scoringEngine) {
         System.out.println("Executing Gold (XAUUSD) Data Pipeline...");
@@ -56,8 +61,44 @@ public class DashboardStateService {
             int finalScore = scoringEngine.calculateGoldCompositeScore(usdMacroSubtotal, cotScore, techScore);
             String bias = scoringEngine.getOverallBiasLabel(finalScore);
 
-            this.latestGoldSummary = new AssetScoreResponse(
-                    "XAUUSD", finalScore, bias, usdMacroSubtotal * -1, cotScore, techScore
+            // --- 1. INVERT THE RAW METRICS ---
+            List<MarketMetric> invertedMetrics = latestSummary.metrics().stream()
+                    .map(m -> new MarketMetric(
+                            m.name(),
+                            m.actualValue(),
+                            m.forecastValue(),
+                            m.scoreDelta() * -1, // Flips +1 to -1, and -1 to +1
+                            m.category()
+
+                    ))
+                    .collect(Collectors.toList());
+
+//            // --- 2. INVERT THE CATEGORY TOTALS ---
+//            Map<String, Integer> invertedCategories = new HashMap<>();
+//            if (latestSummary.categoryScores() != null) {
+//                for (Map.Entry<MetricCategory, Integer> entry : latestSummary.categoryScores().entrySet()) {
+//                    invertedCategories.put(entry.getKey(), entry.getValue() * -1);
+//                }
+//            }
+
+            // --- 2. INVERT THE CATEGORY TOTALS ---
+            Map<String, Integer> invertedCategories = new HashMap<>();
+            if (latestSummary.categoryScores() != null) {
+                for (Map.Entry<MetricCategory, Integer> entry : latestSummary.categoryScores().entrySet()) {
+                    // Convert the MetricCategory enum to a String using .name()
+                    invertedCategories.put(entry.getKey().name(), entry.getValue() * -1);
+                }
+            }
+
+            // --- 3. SAVE TO THE NEW DTO ---
+            this.latestGoldSummary = new GoldSummaryResponse(
+                    finalScore,
+                    bias,
+                    usdMacroSubtotal * -1,
+                    cotScore,
+                    techScore,
+                    invertedCategories,
+                    invertedMetrics
             );
 
             System.out.println("Gold Pipeline completed successfully: " + finalScore + " (" + bias + ")");
@@ -86,8 +127,4 @@ public class DashboardStateService {
             System.out.println("Gold EOD Snapshot saved successfully: " + latestGoldSummary.totalScore() + " (" + latestGoldSummary.biasLabel() + ")");
         }
     }
-
-    public record AssetScoreResponse(
-            String asset, int totalScore, String biasLabel, int invertedMacroBaseline, int cotScore, int technicalScore
-    ) {}
 }
