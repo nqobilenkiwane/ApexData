@@ -121,8 +121,9 @@ function App() {
     ];
   }
 
+  // Fix the filter to match what your Spring Boot backend saves in the database
   const activeHistory = history.filter(item =>
-    isGold ? item.currency === 'XAU' : (item.currency === 'USD' || !item.currency)
+    isGold ? item.currency === 'XAUUSD' : (item.currency === 'USD' || !item.currency)
   );
 
   return (
