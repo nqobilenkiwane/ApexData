@@ -195,48 +195,48 @@ function App() {
         </div>
       )}
 
-      {/* METRICS GRID - Hidden for Gold until specific Gold metrics are added */}
-      {!isGold && (
-        <div style={styles.grid}>
-          {CATEGORY_ORDER.map((category) => {
-            const catScore = summary.categoryScores[category];
-            if (catScore === undefined) return null;
+      {/* METRICS GRID */}
+      <div style={styles.grid}>
+        {CATEGORY_ORDER.map((category) => {
+          // 1. Read from activeSummaryData, NOT summary
+          const catScore = activeSummaryData?.categoryScores?.[category];
+          if (catScore === undefined) return null;
 
-            return (
-              <div key={category} style={styles.card}>
-                <div style={styles.cardHeader}>
-                  <h2 style={styles.cardTitle}>{formatCategory(category)}</h2>
-                  <span style={{...styles.catScoreBadge, color: getMetricScoreColor(catScore)}}>
-                    {catScore > 0 ? '+' : ''}{catScore}
-                  </span>
-                </div>
-                <div style={styles.metricList}>
-                  {summary.metrics
-                    .filter(m => m.category === category)
-                    .map(metric => (
-                      <div key={metric.name} style={styles.metricRow}>
-                        <div style={styles.metricName}>{metric.name}</div>
-                        <div style={styles.metricValues}>
-                          <span style={{ ...styles.actual, color: getActualValueColor(metric.scoreDelta) }}>
-                            Act: {Number(metric.actualValue).toFixed(2)}
-                          </span>
-                          {metric.forecastValue !== 0 && (
-                            <span style={styles.estimate}>
-                              Est: {Number(metric.forecastValue).toFixed(2)}
-                            </span>
-                          )}
-                        </div>
-                        <div style={{...styles.metricScore, color: getMetricScoreColor(metric.scoreDelta)}}>
-                          {metric.scoreDelta > 0 ? '+' : ''}{metric.scoreDelta}
-                        </div>
-                      </div>
-                    ))}
-                </div>
+          return (
+            <div key={category} style={styles.card}>
+              <div style={styles.cardHeader}>
+                <h2 style={styles.cardTitle}>{formatCategory(category)}</h2>
+                <span style={{...styles.catScoreBadge, color: getMetricScoreColor(catScore)}}>
+                  {catScore > 0 ? '+' : ''}{catScore}
+                </span>
               </div>
-            );
-          })}
-        </div>
-      )}
+              <div style={styles.metricList}>
+                {/* 2. Read from activeSummaryData.metrics, NOT summary.metrics */}
+                {activeSummaryData?.metrics
+                  ?.filter(m => m.category === category)
+                  .map(metric => (
+                    <div key={metric.name} style={styles.metricRow}>
+                      <div style={styles.metricName}>{metric.name}</div>
+                      <div style={styles.metricValues}>
+                        <span style={{ ...styles.actual, color: getActualValueColor(metric.scoreDelta) }}>
+                          Act: {Number(metric.actualValue).toFixed(2)}
+                        </span>
+                        {metric.forecastValue !== 0 && (
+                          <span style={styles.estimate}>
+                            Est: {Number(metric.forecastValue).toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{...styles.metricScore, color: getMetricScoreColor(metric.scoreDelta)}}>
+                        {metric.scoreDelta > 0 ? '+' : ''}{metric.scoreDelta}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   )
 }
@@ -245,8 +245,6 @@ const styles = {
   container: { backgroundColor: '#000000', minHeight: '100vh', color: '#FFFFFF', fontFamily: "'Inter', 'Segoe UI', sans-serif", padding: '40px 20px' },
   loading: { backgroundColor: '#000000', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563EB', fontSize: '24px', fontFamily: 'monospace' },
   header: { maxWidth: '1400px', margin: '0 auto 40px' },
-
-  // New Summary Card Styles
   summaryCard: { backgroundColor: '#232323', borderRadius: '8px', padding: '25px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)', color: '#FFFFFF', maxWidth: '450px', width: '100%', margin: '0 auto' },
   summaryHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #3a3a3a', paddingBottom: '15px' },
   dropdown: { backgroundColor: 'transparent', color: '#FFFFFF', fontWeight: '900', fontSize: '1.4rem', border: 'none', outline: 'none', cursor: 'pointer', appearance: 'none', paddingRight: '30px', backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23FFFFFF%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right center', backgroundSize: '0.8rem' },
@@ -257,20 +255,15 @@ const styles = {
   pillarRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   pillarName: { fontSize: '1rem', fontWeight: '500', color: '#E4E4E7' },
   pillarScore: { fontSize: '1.125rem', fontWeight: '700' },
-
   chartSection: { maxWidth: '1400px', margin: '0 auto 40px', backgroundColor: '#111111', borderRadius: '8px', padding: '25px', border: '1px solid #222222' },
   chartWrapper: { height: '350px', width: '100%', marginTop: '20px' },
-
   tooltip: { backgroundColor: '#000000', padding: '15px', border: '1px solid #222222', borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' },
   tooltipLabel: { margin: '0 0 8px 0', color: '#888888', fontSize: '0.9rem', borderBottom: '1px solid #222222', paddingBottom: '4px' },
-
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))', gap: '25px', maxWidth: '1400px', margin: '0 auto' },
   card: { backgroundColor: '#111111', borderRadius: '8px', padding: '25px', border: '1px solid #222222' },
-
   cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #2563EB', paddingBottom: '15px', marginBottom: '15px' },
   cardTitle: { margin: 0, fontSize: '1.2rem', color: '#FFFFFF', letterSpacing: '1px' },
   catScoreBadge: { fontSize: '1.2rem', fontWeight: 'bold', backgroundColor: 'rgba(255,255,255,0.05)', padding: '5px 12px', borderRadius: '4px' },
-
   metricList: { display: 'flex', flexDirection: 'column', gap: '12px' },
   metricRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#000000', padding: '12px 15px', borderRadius: '6px', fontSize: '0.9rem', border: '1px solid #1A1A1A' },
   metricName: { flex: '1', color: '#CCCCCC', fontWeight: '500' },
