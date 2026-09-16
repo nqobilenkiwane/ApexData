@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.uniforex.apexdata.MarketDataClient;
 import com.uniforex.apexdata.model.MarketMetric;
 import com.uniforex.apexdata.model.MetricCategory;
+import org.springframework.stereotype.Service;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -17,6 +18,7 @@ import java.util.List;
  * Service responsible for fetching and analyzing institutional market positioning data
  * from the Commodity Futures Trading Commission (CFTC).
  */
+@Service
 public class CftcService {
 
     private final MarketDataClient client;
