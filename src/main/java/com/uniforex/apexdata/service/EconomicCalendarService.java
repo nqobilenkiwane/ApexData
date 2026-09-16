@@ -5,18 +5,20 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.uniforex.apexdata.MarketDataClient;
 import com.uniforex.apexdata.model.MarketMetric;
 import com.uniforex.apexdata.model.MetricCategory;
+import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Service
 public class EconomicCalendarService {
 
     private final MarketDataClient client;
     private final ObjectMapper mapper;
 
-    public EconomicCalendarService(MarketDataClient client, ObjectMapper mapper, String apiKey) {
+    public EconomicCalendarService(MarketDataClient client, ObjectMapper mapper) {
         this.client = client;
         this.mapper = mapper;
     }
