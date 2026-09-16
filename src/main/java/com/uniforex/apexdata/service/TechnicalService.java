@@ -25,26 +25,27 @@ public class TechnicalService {
         this.mapper = mapper;
     }
 
-    public TechnicalData fetchUsdTechnicals() {
+    /**
+     * Fetches historical daily bars for US Dollar Index Futures (DX=F)
+     * and computes 200 SMA and 14 RSI natively via ta4j.
+     */
+    public AssetTechnicalData fetchUsdTechnicals() {
         try {
-            // Swap to DX=F (US Dollar Index Futures) to avoid Yahoo's DX-Y.NYB 500 errors
-            AssetTechnicalData dxy = fetchSeriesAndCalculateMetrics("DX=F");
-
-            // Removed the / 10.0 division since Yahoo now quotes exact percentages
-            double yield10Y = fetchCurrentPrice("^TNX");
-            double yield2Y = fetchCurrentPrice("^IRX");
-
-            return new TechnicalData(dxy.currentPrice(), dxy.sma200(), dxy.rsi14(), yield10Y, yield2Y);
+            return fetchSeriesAndCalculateMetrics("DX=F");
         } catch (Exception e) {
-            throw new RuntimeException("Failed to fetch USD technicals from Yahoo Finance.", e);
+            throw new RuntimeException("Failed to fetch USD technicals from Yahoo Finance: " + e.getMessage(), e);
         }
     }
 
+    /**
+     * Fetches historical daily bars for COMEX Gold Futures (GC=F)
+     * and computes 200 SMA and 14 RSI natively via ta4j.
+     */
     public AssetTechnicalData fetchGoldTechnicals() {
         try {
             return fetchSeriesAndCalculateMetrics("GC=F");
         } catch (Exception e) {
-            throw new RuntimeException("Failed to fetch XAU/USD data from Yahoo Finance.", e);
+            throw new RuntimeException("Failed to fetch XAU/USD technicals from Yahoo Finance: " + e.getMessage(), e);
         }
     }
 
@@ -81,18 +82,8 @@ public class TechnicalService {
         );
     }
 
-    private double fetchCurrentPrice(String ticker) throws Exception {
-        String url = "https://query1.finance.yahoo.com/v8/finance/chart/" + ticker + "?range=1d&interval=1d";
-        String response = client.fetchRawJson(url);
-        JsonNode root = mapper.readTree(response);
-        JsonNode closes = root.path("chart").path("result").get(0).path("indicators").path("quote").get(0).path("close");
-
-        for (int i = closes.size() - 1; i >= 0; i--) {
-            if (!closes.get(i).isNull()) return closes.get(i).asDouble();
-        }
-        return 0.0;
-    }
-
-    public record TechnicalData(double currentPrice, double sma200, double rsi14, double yield10Y, double yield2Y) {}
+    /**
+     * Immutable data carrier for asset technical momentum indicators.
+     */
     public record AssetTechnicalData(double currentPrice, double sma200, double rsi14) {}
 }

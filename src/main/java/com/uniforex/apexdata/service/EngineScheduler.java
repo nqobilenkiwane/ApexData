@@ -1,8 +1,6 @@
 package com.uniforex.apexdata.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.uniforex.apexdata.CompositeScoringEngine;
-import com.uniforex.apexdata.MarketDataClient;
 import com.uniforex.apexdata.model.MarketMetric;
 import com.uniforex.apexdata.model.MetricCategory;
 import com.uniforex.apexdata.model.dto.DashboardSummaryResponse;
@@ -10,12 +8,13 @@ import com.uniforex.apexdata.model.entity.CalendarEventEntity;
 import com.uniforex.apexdata.model.entity.HistoricalScoreEntity;
 import com.uniforex.apexdata.repository.CalendarEventRepository;
 import com.uniforex.apexdata.repository.HistoricalScoreRepository;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -29,136 +28,139 @@ public class EngineScheduler {
 
     private final CftcService cftcService;
     private final TechnicalService technicalService;
+    private final TreasuryYieldService yieldService;
     private final EconomicCalendarService calendarService;
     private final CompositeScoringEngine engine;
 
-    // Cache for slow-moving macro data so the fast calendar cycle can reuse it
-    private List<MarketMetric> cachedInstitutionalMetrics = new ArrayList<>();
-    private TechnicalService.TechnicalData cachedTechData = new TechnicalService.TechnicalData(0.85, 0.859, 50.0, 4.39, 4.79); // Fallback init
+    // Thread-safe caches for macro pillars
+    private List<MarketMetric> cachedInstitutionalMetrics = Collections.synchronizedList(new ArrayList<>());
+    private List<MarketMetric> cachedYieldMetrics = Collections.synchronizedList(new ArrayList<>());
+    private volatile TechnicalService.AssetTechnicalData cachedTechData = new TechnicalService.AssetTechnicalData(0.85, 0.859, 50.0);
 
     public EngineScheduler(
             CalendarEventRepository calendarRepo,
             HistoricalScoreRepository historyRepo,
-            DashboardStateService stateService) {
+            DashboardStateService stateService,
+            CftcService cftcService,
+            TechnicalService technicalService,
+            TreasuryYieldService yieldService,
+            EconomicCalendarService calendarService,
+            CompositeScoringEngine engine) {
 
         this.calendarRepo = calendarRepo;
         this.historyRepo = historyRepo;
         this.stateService = stateService;
-
-        MarketDataClient client = new MarketDataClient();
-        ObjectMapper mapper = new ObjectMapper();
-        this.engine = new CompositeScoringEngine();
-
-        this.cftcService = new CftcService(client, mapper);
-        this.technicalService = new TechnicalService(client, mapper);
-        this.calendarService = new EconomicCalendarService(client, mapper, null);
+        this.cftcService = cftcService;
+        this.technicalService = technicalService;
+        this.yieldService = yieldService;
+        this.calendarService = calendarService;
+        this.engine = engine;
     }
 
     @EventListener(ApplicationReadyEvent.class)
     public void primeStateOnStartup() {
         System.out.println("\n[SYSTEM] Application Started. Priming dashboard state from database...");
         try {
-            rebuildAndScoreState();
+            // Initial one-time fetch to populate static caches
+            refreshMacroData();
+            rebuildAndScoreState(false);
         } catch (Exception e) {
             System.err.println("[SYSTEM] Failed to prime state on startup: " + e.getMessage());
         }
     }
 
-    // 1. FAST CYCLE: Runs at the top of every hour to catch live news drops
+    // 1. FAST CYCLE: Runs every 15 mins to capture newly released calendar figures
     @Scheduled(cron = "0 0/15 * * * ?")
     public void executeCalendarCycle() {
-        System.out.println("\n[SYSTEM] Executing Hourly Calendar Update...");
-
-        System.out.println("[SYSTEM] Fetching CFTC data...");
-        try {
-            cachedInstitutionalMetrics = cftcService.fetchInstitutionalData();
-            System.out.println("[DEBUG] CFTC Metrics Found: " + cachedInstitutionalMetrics.size());
-        } catch (Exception e) {
-            System.err.println("[API Error] CFTC: " + e.getMessage());
-        }
-
-        System.out.println("[SYSTEM] Fetching Calendar Events data...");
+        System.out.println("\n[SYSTEM] Executing 15-Minute Calendar Poll...");
         try {
             List<MarketMetric> liveCalendarEvents = calendarService.fetchLiveCalendarEvents();
             System.out.println("[DEBUG] Calendar Events Found: " + liveCalendarEvents.size());
 
-            for (MarketMetric event : liveCalendarEvents) {
-                calendarRepo.save(new CalendarEventEntity(event.name(), event.actualValue(), event.forecastValue(), event.category()));
+            if (!liveCalendarEvents.isEmpty()) {
+                List<CalendarEventEntity> entities = liveCalendarEvents.stream()
+                        .map(e -> new CalendarEventEntity(e.name(), e.actualValue(), e.forecastValue(), e.category()))
+                        .toList();
+                calendarRepo.saveAll(entities);
             }
 
-            rebuildAndScoreState();
+            rebuildAndScoreState(false);
 
         } catch (Exception e) {
             System.err.println("[API Error] Calendar: " + e.getMessage());
         }
     }
 
-    // 2. SLOW CYCLE: Runs at 00:00 and 12:00 everyday to respect API limits
+    // 2. SLOW CYCLE: Runs twice a day for Yields, CFTC, and Daily Candle closes
     @Scheduled(cron = "0 0 0,12 * * *")
     public void executeMacroCycle() {
-        System.out.println("\n[SYSTEM] Executing 12-Hour Macro & Technicals...");
+        System.out.println("\n[SYSTEM] Executing Macro, Yields & Technical Cycle...");
+        refreshMacroData();
+        // Record snapshot to history ledger at daily/macro boundaries
+        rebuildAndScoreState(true);
+    }
+
+    private void refreshMacroData() {
         try {
-            // 12-second buffer to guarantee we do not trip the 5 req/min rate limit
-            Thread.sleep(12000);
-
-            System.out.println("[SYSTEM] Fetching Technicals...");
-            try {
-                cachedTechData = technicalService.fetchUsdTechnicals();
-                System.out.println("[DEBUG] Technicals Found...");
-            } catch (Exception e) {
-                System.err.println("[API Error] Technicals: " + e.getMessage());
-                System.out.println("[SYSTEM] Rate limit hit. Retaining previously cached Technical Data.");
-            }
-
-            rebuildAndScoreState();
-
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            System.err.println("[SYSTEM] Rate limit buffer interrupted.");
+            cachedInstitutionalMetrics = cftcService.fetchInstitutionalData();
         } catch (Exception e) {
-            System.err.println("[SYSTEM] Macro cycle failed: " + e.getMessage());
+            System.err.println("[API Error] CFTC: " + e.getMessage());
+        }
+
+        try {
+            cachedYieldMetrics = yieldService.fetchLatestYields();
+        } catch (Exception e) {
+            System.err.println("[API Error] Treasury Yields: " + e.getMessage());
+        }
+
+        try {
+            cachedTechData = technicalService.fetchUsdTechnicals();
+        } catch (Exception e) {
+            System.err.println("[API Error] Technicals: " + e.getMessage());
         }
     }
 
-    // Centralized state builder that merges fast and slow data streams
-    private void rebuildAndScoreState() {
-        // 1. Load historical calendar state from Postgres
+    private synchronized void rebuildAndScoreState(boolean recordHistoricalSnapshot) {
+        // 1. Load historical calendar state safely (resolving duplicate key collisions)
         Map<String, MarketMetric> persistedState = calendarRepo.findAll().stream()
                 .collect(Collectors.toMap(
                         CalendarEventEntity::getMetricName,
-                        e -> new MarketMetric(e.getMetricName(), e.getActualValue(), e.getEstimateValue(), 0, e.getCategory())
+                        e -> new MarketMetric(e.getMetricName(), e.getActualValue(), e.getEstimateValue(), 0, e.getCategory()),
+                        (existing, replacement) -> replacement
                 ));
 
-        // 2. Combine Calendar + CFTC
+        // 2. Combine Calendar + CFTC + Yields
         List<MarketMetric> combinedMetrics = new ArrayList<>(persistedState.values());
         combinedMetrics.addAll(cachedInstitutionalMetrics);
+        combinedMetrics.addAll(cachedYieldMetrics);
 
-        // 3. Base Score Engine Pass
+        // 3. Base Score Engine Pass (Scores Calendar, CFTC, and Yields)
         List<MarketMetric> scoredMetrics = new ArrayList<>(engine.applyScores(combinedMetrics));
 
-        // 4. Inject and Score Technicals & Yields
-        if (cachedTechData.currentPrice() > 0) {
-            int techScore = engine.scoreTechnicals(cachedTechData.currentPrice(), cachedTechData.sma200(), cachedTechData.rsi14());
-            scoredMetrics.add(new MarketMetric("Technical Momentum", cachedTechData.currentPrice(), 0.0, techScore, MetricCategory.TECHNICALS));
-
-            int score10Y = engine.scoreAbsoluteYield(cachedTechData.yield10Y(), 4.00);
-            int score2Y = engine.scoreAbsoluteYield(cachedTechData.yield2Y(), 4.50);
-
-            scoredMetrics.add(new MarketMetric("2Y Yield Momentum", cachedTechData.yield2Y(), 0.0, score2Y, MetricCategory.CAPITAL_FLOWS));
-            scoredMetrics.add(new MarketMetric("10Y Real Yield", cachedTechData.yield10Y(), 0.0, score10Y, MetricCategory.CAPITAL_FLOWS));
-
-            double yieldCurve = cachedTechData.yield10Y() - cachedTechData.yield2Y();
-            int curveScore = engine.scoreYieldCurve(yieldCurve);
-
-            scoredMetrics.add(new MarketMetric("2s10s Yield Curve", yieldCurve, 0.0, curveScore, MetricCategory.CAPITAL_FLOWS));
+        // 4. Score Technical Momentum
+        if (cachedTechData != null && cachedTechData.currentPrice() > 0) {
+            int techScore = engine.scoreTechnicals(
+                    cachedTechData.currentPrice(),
+                    cachedTechData.sma200(),
+                    cachedTechData.rsi14()
+            );
+            scoredMetrics.add(new MarketMetric(
+                    "Technical Momentum",
+                    cachedTechData.currentPrice(),
+                    0.0,
+                    techScore,
+                    MetricCategory.TECHNICALS
+            ));
         }
 
         int totalScore = engine.calculateTotalScore(scoredMetrics);
         String overallBias = engine.getOverallBiasLabel(totalScore);
         Map<MetricCategory, Integer> categoryScores = engine.calculateCategoryScores(scoredMetrics);
 
-        // 5. Save to Ledger
-        historyRepo.save(new HistoricalScoreEntity("USD", totalScore, overallBias));
+        // 5. Conditional Ledger Write (prevents table bloat)
+        if (recordHistoricalSnapshot) {
+            historyRepo.save(new HistoricalScoreEntity("USD", totalScore, overallBias));
+        }
 
         // 6. Update Dashboard UI Payload
         DashboardSummaryResponse summary = new DashboardSummaryResponse(
@@ -166,9 +168,9 @@ public class EngineScheduler {
         );
         stateService.setLatestSummary(summary);
 
-        // 7. ORCHESTRATION HOOK: Trigger Gold Pipeline immediately after USD Macro is secured
+        // 7. Trigger Gold Pipeline hook
         stateService.updateGoldPipeline(this.cftcService, this.technicalService, this.engine);
 
-        System.out.printf("[SYSTEM] Dashboard State Rebuilt. USD Score (%+d / %s) saved to ledger.\n", totalScore, overallBias);
+        System.out.printf("[SYSTEM] Dashboard State Rebuilt. USD Score (%+d / %s).\n", totalScore, overallBias);
     }
 }
