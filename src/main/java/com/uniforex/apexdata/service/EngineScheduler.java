@@ -35,7 +35,7 @@ public class EngineScheduler {
     // Thread-safe caches for macro pillars
     private List<MarketMetric> cachedInstitutionalMetrics = Collections.synchronizedList(new ArrayList<>());
     private List<MarketMetric> cachedYieldMetrics = Collections.synchronizedList(new ArrayList<>());
-    private volatile TechnicalService.AssetTechnicalData cachedTechData = new TechnicalService.AssetTechnicalData(0.00, 0.000, 00.0);
+    private volatile TechnicalService.AssetTechnicalData cachedTechData = new TechnicalService.AssetTechnicalData(0.00, 0.000, 50.0);
 
     public EngineScheduler(
             CalendarEventRepository calendarRepo,
