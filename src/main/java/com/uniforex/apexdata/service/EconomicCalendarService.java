@@ -21,56 +21,58 @@ public class EconomicCalendarService {
 
     private final HttpClient httpClient;
     private final ObjectMapper mapper;
-    private final String rapidApiKey;
-    private final String rapidApiHost = "ultimate-economic-calendar.p.rapidapi.com";
+    private final String apifyToken;
 
-    public EconomicCalendarService(ObjectMapper mapper, @Value("${rapidapi.key}") String rapidApiKey) {
+    public EconomicCalendarService(ObjectMapper mapper, @Value("${apify.token}") String apifyToken) {
         this.httpClient = HttpClient.newHttpClient();
         this.mapper = mapper;
-        this.rapidApiKey = rapidApiKey;
+        this.apifyToken = apifyToken;
     }
 
     public List<MarketMetric> fetchLiveCalendarEvents() throws Exception {
         Map<String, MarketMetric> uniqueMetrics = new HashMap<>();
-        System.out.println("[SYSTEM] Attempting calendar fetch via RapidAPI...");
 
-        String url = "https://" + rapidApiHost + "/economic-events";
+        System.out.println("[SYSTEM] Attempting calendar fetch via Apify proxy...");
+
+        // Dynamically append the injected token
+        String apifyUrl = "https://api.apify.com/v2/acts/RhokY2jbsQ6amjNKP/run-sync-get-dataset-items?token=" + apifyToken;
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .header("X-RapidAPI-Key", rapidApiKey)
-                .header("X-RapidAPI-Host", rapidApiHost)
-                .GET()
+                .uri(URI.create(apifyUrl))
+                .POST(HttpRequest.BodyPublishers.noBody())
                 .build();
+
+        // ... the rest of your HTTP request and parsing logic remains exactly the same
 
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
-        if (response.statusCode() != 200) {
-            throw new RuntimeException("RapidAPI returned error code: " + response.statusCode() + " - " + response.body());
+        if (response.statusCode() != 201 && response.statusCode() != 200) {
+            throw new RuntimeException("Apify returned error code: " + response.statusCode() + " - " + response.body());
         }
 
         JsonNode events = mapper.readTree(response.body());
 
         if (events == null || !events.isArray()) {
-            throw new Exception("RapidAPI returned invalid or empty data.");
+            throw new Exception("Apify returned invalid or empty data.");
         }
 
+        // Reverting to the original ForexFactory parsing logic
         for (JsonNode node : events) {
-            String currency = node.path("currency").asText("");
-            if (!"USD".equalsIgnoreCase(currency)) {
+            String country = node.path("country").asText("");
+            if (!"USD".equalsIgnoreCase(country)) {
                 continue;
             }
 
             String title = node.path("title").asText("").toLowerCase().trim();
-            String actualText = node.path("actual").asText("");
-            String forecastText = node.path("forecast").asText("");
+            String actualText = cleanString(node.path("actual").asText(""));
+            String forecastText = cleanString(node.path("forecast").asText(""));
 
-            if (actualText.isEmpty() || actualText.equals("-") || actualText.equals("null")) {
+            if (actualText.isEmpty() || actualText.equals("-")) {
                 continue;
             }
 
             double actual = parseValue(actualText);
-            double estimate = (forecastText.isEmpty() || forecastText.equals("-") || forecastText.equals("null")) ? actual : parseValue(forecastText);
+            double estimate = (forecastText.isEmpty() || forecastText.equals("-")) ? actual : parseValue(forecastText);
 
             if (title.contains("adp") && title.contains("employment")) {
                 uniqueMetrics.put("ADP Private Employment", new MarketMetric("ADP Private Employment", actual, estimate, 0, MetricCategory.JOB_MARKET));
@@ -109,14 +111,37 @@ public class EconomicCalendarService {
         return new ArrayList<>(uniqueMetrics.values());
     }
 
+    private String cleanString(String input) {
+        if (input == null) return "";
+        return input.replace('\u00A0', ' ')
+                .replace('\u2013', '-')
+                .replace('\u2014', '-')
+                .replace('\u2212', '-')
+                .trim();
+    }
+
     private double parseValue(String val) {
         if (val == null || val.isEmpty()) return 0.0;
 
-        // Clean non-numeric characters while preserving negatives and decimals
-        val = val.replaceAll("<[^>]*>", "").replaceAll("[^\\d.-]", "").trim();
+        val = cleanString(val).replaceAll("<[^>]*>", "").replaceAll("[,%]", "").trim();
+        double multiplier = 1.0;
+        String lowerVal = val.toLowerCase();
+
+        if (lowerVal.endsWith("k")) {
+            multiplier = 1_000.0;
+            val = lowerVal.replace("k", "");
+        } else if (lowerVal.endsWith("m")) {
+            multiplier = 1_000_000.0;
+            val = lowerVal.replace("m", "");
+        } else if (lowerVal.endsWith("b")) {
+            multiplier = 1_000_000_000.0;
+            val = lowerVal.replace("b", "");
+        }
+
         try {
-            return Double.parseDouble(val);
+            return Double.parseDouble(val.trim()) * multiplier;
         } catch (NumberFormatException e) {
+            System.err.println("[CALENDAR WARN] Could not parse numerical value from string: '" + val + "'");
             return 0.0;
         }
     }
