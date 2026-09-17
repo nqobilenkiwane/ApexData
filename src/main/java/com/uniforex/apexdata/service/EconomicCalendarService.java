@@ -34,8 +34,8 @@ public class EconomicCalendarService {
 
         System.out.println("[SYSTEM] Attempting calendar fetch via Store Actor (xtracto~forex-factory-calendar)...");
 
-// Use the store actor's unique ID found in your browser URL
-        String apifyUrl = "https://api.apify.com/v2/acts/gteQ2efd7j7ne7040/run-sync-get-dataset-items?token=" + apifyToken;
+        // Fix the URL path for community-published store actors
+        String apifyUrl = "https://api.apify.com/v2/acts/xtracto~forex-factory-calendar/run-sync-get-dataset-items?token=" + apifyToken;
 
         // Provide the input payload expected by the store actor
         String jsonInputBody = "{\n" +
