@@ -43,10 +43,13 @@ public class CompositeScoringEngine {
                     case "YoY Inflation":
                         score = m.actualValue() > 2.0 ? 1 : -1;
                         break;
-                    case "10Y Real Yield":
-                        score = m.actualValue() > 0 ? 1 : -1;
+                    case "10Y Treasury Yield": // FIXED NAME
+                        score = scoreAbsoluteYield(m.actualValue(), 4.00);
                         break;
-                    case "2s10s Yield Curve":
+                    case "2Y Treasury Yield":  // NEW CASE
+                        score = scoreAbsoluteYield(m.actualValue(), 4.50);
+                        break;
+                    case "10s2s Yield Curve Spread": // FIXED NAME
                         score = scoreYieldCurve(m.actualValue());
                         break;
                     case "COT Net Positioning":
@@ -54,11 +57,11 @@ public class CompositeScoringEngine {
                         break;
                     case "COT Long Percentage":
                         double pct = m.actualValue();
-                        if (pct >= 80) score = -1;       // Bearish (Overcrowded Longs)
-                        else if (pct <= 20) score = 1;   // Bullish (Short Squeeze Risk)
-                        else if (pct >= 55) score = 1;   // Bullish (Healthy Trend)
-                        else if (pct <= 45) score = -1;  // Bearish (Healthy Short)
-                        else score = 0;                  // Neutral
+                        if (pct >= 80) score = -1;
+                        else if (pct <= 20) score = 1;
+                        else if (pct >= 55) score = 1;
+                        else if (pct <= 45) score = -1;
+                        else score = 0;
                         break;
                     default:
                         score = 0;
