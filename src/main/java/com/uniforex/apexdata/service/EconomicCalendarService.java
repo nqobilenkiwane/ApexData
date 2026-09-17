@@ -32,34 +32,40 @@ public class EconomicCalendarService {
     public List<MarketMetric> fetchLiveCalendarEvents() throws Exception {
         Map<String, MarketMetric> uniqueMetrics = new HashMap<>();
 
-        System.out.println("[SYSTEM] Attempting calendar fetch via Apify proxy...");
+        System.out.println("[SYSTEM] Attempting calendar fetch via Store Actor (xtracto~forex-factory-calendar)...");
 
-        // Dynamically append the injected token
-        String apifyUrl = "https://api.apify.com/v2/acts/RhokY2jbsQ6amjNKP/run-sync-get-dataset-items?token=" + apifyToken;
+        // Target the pre-built store actor endpoint
+        String apifyUrl = "https://api.apify.com/v2/acts/xtracto~forex-factory-calendar/run-sync-get-dataset-items?token=" + apifyToken;
+
+        // Provide the input payload expected by the store actor
+        String jsonInputBody = "{\n" +
+                "  \"dateRange\": \"thisweek\",\n" +
+                "  \"currencies\": [\"USD\"],\n" +
+                "  \"minImpact\": \"medium\"\n" +
+                "}";
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(apifyUrl))
-                .POST(HttpRequest.BodyPublishers.noBody())
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(jsonInputBody))
                 .build();
-
-        // ... the rest of your HTTP request and parsing logic remains exactly the same
 
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
         if (response.statusCode() != 201 && response.statusCode() != 200) {
-            throw new RuntimeException("Apify returned error code: " + response.statusCode() + " - " + response.body());
+            throw new RuntimeException("Apify Store Actor returned error code: " + response.statusCode() + " - " + response.body());
         }
 
         JsonNode events = mapper.readTree(response.body());
 
         if (events == null || !events.isArray()) {
-            throw new Exception("Apify returned invalid or empty data.");
+            throw new Exception("Apify Store Actor returned invalid or empty dataset.");
         }
 
-        // Reverting to the original ForexFactory parsing logic
         for (JsonNode node : events) {
-            String country = node.path("country").asText("");
-            if (!"USD".equalsIgnoreCase(country)) {
+            // The store actor uses 'currency' (e.g., "USD")
+            String currency = node.path("currency").asText("");
+            if (!"USD".equalsIgnoreCase(currency)) {
                 continue;
             }
 
@@ -67,12 +73,12 @@ public class EconomicCalendarService {
             String actualText = cleanString(node.path("actual").asText(""));
             String forecastText = cleanString(node.path("forecast").asText(""));
 
-            if (actualText.isEmpty() || actualText.equals("-")) {
+            if (actualText.isEmpty() || actualText.equals("-") || actualText.equals("null")) {
                 continue;
             }
 
             double actual = parseValue(actualText);
-            double estimate = (forecastText.isEmpty() || forecastText.equals("-")) ? actual : parseValue(forecastText);
+            double estimate = (forecastText.isEmpty() || forecastText.equals("-") || forecastText.equals("null")) ? actual : parseValue(forecastText);
 
             if (title.contains("adp") && title.contains("employment")) {
                 uniqueMetrics.put("ADP Private Employment", new MarketMetric("ADP Private Employment", actual, estimate, 0, MetricCategory.JOB_MARKET));
@@ -107,7 +113,7 @@ public class EconomicCalendarService {
             }
         }
 
-        System.out.println("[SYSTEM] Calendar parsed successfully. USD metrics captured: " + uniqueMetrics.size());
+        System.out.println("[SYSTEM] Store Actor calendar parsed successfully. USD metrics captured: " + uniqueMetrics.size());
         return new ArrayList<>(uniqueMetrics.values());
     }
 
