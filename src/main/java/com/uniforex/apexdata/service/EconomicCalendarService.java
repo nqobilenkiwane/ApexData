@@ -2,11 +2,15 @@ package com.uniforex.apexdata.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.uniforex.apexdata.MarketDataClient;
 import com.uniforex.apexdata.model.MarketMetric;
 import com.uniforex.apexdata.model.MetricCategory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -15,47 +19,59 @@ import java.util.Map;
 @Service
 public class EconomicCalendarService {
 
-    private final MarketDataClient client;
+    private final HttpClient httpClient;
     private final ObjectMapper mapper;
+    private final String rapidApiKey;
+    private final String rapidApiHost = "ultimate-economic-calendar.p.rapidapi.com";
 
-    public EconomicCalendarService(MarketDataClient client, ObjectMapper mapper) {
-        this.client = client;
+    public EconomicCalendarService(ObjectMapper mapper, @Value("${rapidapi.key}") String rapidApiKey) {
+        this.httpClient = HttpClient.newHttpClient();
         this.mapper = mapper;
+        this.rapidApiKey = rapidApiKey;
     }
 
     public List<MarketMetric> fetchLiveCalendarEvents() throws Exception {
         Map<String, MarketMetric> uniqueMetrics = new HashMap<>();
+        System.out.println("[SYSTEM] Attempting calendar fetch via RapidAPI...");
 
-        System.out.println("[SYSTEM] Attempting calendar fetch via ForexFactory Public JSON CDN...");
+        String url = "https://" + rapidApiHost + "/economic-events";
 
-        String url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json";
-        String response = client.fetchRawJson(url);
-        JsonNode events = mapper.readTree(response);
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("X-RapidAPI-Key", rapidApiKey)
+                .header("X-RapidAPI-Host", rapidApiHost)
+                .GET()
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() != 200) {
+            throw new RuntimeException("RapidAPI returned error code: " + response.statusCode() + " - " + response.body());
+        }
+
+        JsonNode events = mapper.readTree(response.body());
 
         if (events == null || !events.isArray()) {
-            throw new Exception("ForexFactory CDN returned invalid or empty data.");
+            throw new Exception("RapidAPI returned invalid or empty data.");
         }
 
         for (JsonNode node : events) {
-            String country = node.path("country").asText("");
-            if (!"USD".equalsIgnoreCase(country)) {
+            String currency = node.path("currency").asText("");
+            if (!"USD".equalsIgnoreCase(currency)) {
                 continue;
             }
 
             String title = node.path("title").asText("").toLowerCase().trim();
-            String actualText = cleanString(node.path("actual").asText(""));
-            String forecastText = cleanString(node.path("forecast").asText(""));
+            String actualText = node.path("actual").asText("");
+            String forecastText = node.path("forecast").asText("");
 
-            // 1. Skip if the event hasn't actually happened yet (actual is empty or dash)
-            if (actualText.isEmpty() || actualText.equals("-")) {
+            if (actualText.isEmpty() || actualText.equals("-") || actualText.equals("null")) {
                 continue;
             }
 
             double actual = parseValue(actualText);
-            // Default estimate to actual if no consensus was published, preventing 0.0 skew
-            double estimate = (forecastText.isEmpty() || forecastText.equals("-")) ? actual : parseValue(forecastText);
+            double estimate = (forecastText.isEmpty() || forecastText.equals("-") || forecastText.equals("null")) ? actual : parseValue(forecastText);
 
-            // 2. Strict Title Matching to prevent Core / MoM / YoY collisions
             if (title.contains("adp") && title.contains("employment")) {
                 uniqueMetrics.put("ADP Private Employment", new MarketMetric("ADP Private Employment", actual, estimate, 0, MetricCategory.JOB_MARKET));
             } else if ((title.contains("non-farm") || title.contains("nonfarm")) && !title.contains("payroll")) {
@@ -93,38 +109,14 @@ public class EconomicCalendarService {
         return new ArrayList<>(uniqueMetrics.values());
     }
 
-    private String cleanString(String input) {
-        if (input == null) return "";
-        return input.replace('\u00A0', ' ') // Replace non-breaking space
-                .replace('\u2013', '-') // Replace en-dash
-                .replace('\u2014', '-') // Replace em-dash
-                .replace('\u2212', '-') // Replace math minus sign
-                .trim();
-    }
-
     private double parseValue(String val) {
         if (val == null || val.isEmpty()) return 0.0;
 
-        // Clean HTML artifacts, percentage signs, and commas
-        val = cleanString(val).replaceAll("<[^>]*>", "").replaceAll("[,%]", "").trim();
-        double multiplier = 1.0;
-        String lowerVal = val.toLowerCase();
-
-        if (lowerVal.endsWith("k")) {
-            multiplier = 1_000.0;
-            val = lowerVal.replace("k", "");
-        } else if (lowerVal.endsWith("m")) {
-            multiplier = 1_000_000.0;
-            val = lowerVal.replace("m", "");
-        } else if (lowerVal.endsWith("b")) {
-            multiplier = 1_000_000_000.0;
-            val = lowerVal.replace("b", "");
-        }
-
+        // Clean non-numeric characters while preserving negatives and decimals
+        val = val.replaceAll("<[^>]*>", "").replaceAll("[^\\d.-]", "").trim();
         try {
-            return Double.parseDouble(val.trim()) * multiplier;
+            return Double.parseDouble(val);
         } catch (NumberFormatException e) {
-            System.err.println("[CALENDAR WARN] Could not parse numerical value from string: '" + val + "'");
             return 0.0;
         }
     }
