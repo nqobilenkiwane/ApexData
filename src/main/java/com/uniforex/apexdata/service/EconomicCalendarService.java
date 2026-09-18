@@ -11,6 +11,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -32,16 +34,23 @@ public class EconomicCalendarService {
     public List<MarketMetric> fetchLiveCalendarEvents() throws Exception {
         Map<String, MarketMetric> uniqueMetrics = new HashMap<>();
 
-        System.out.println("[SYSTEM] Attempting calendar fetch via Store Actor (xtracto~forex-factory-calendar)...");
+        System.out.println("[SYSTEM] Attempting calendar fetch via Store Actor (Investing.com)...");
 
-        // Use the raw actor hash ID found in your Apify browser URL
-        String apifyUrl = "https://api.apify.com/v2/actors/xtracto~forexfactory-calendar/run-sync-get-dataset-items?token=" + apifyToken;
+        // The exact Investing.com actor hash ID
+        String apifyUrl = "https://api.apify.com/v2/actors/aaSpP7M39TUNh1Xto/run-sync-get-dataset-items?token=" + apifyToken;
 
-        // Provide the input payload expected by the store actor
+        // Generate a rolling 14-day window dynamically so the data never goes stale
+        LocalDate today = LocalDate.now();
+        String fromDate = today.minusDays(7).format(DateTimeFormatter.ISO_LOCAL_DATE);
+        String toDate = today.plusDays(7).format(DateTimeFormatter.ISO_LOCAL_DATE);
+
+        // The precise JSON payload required by the Investing.com actor
         String jsonInputBody = "{\n" +
-                "  \"dateRange\": \"thisWeek\",\n" +
-                "  \"currencies\": [\"USD\"],\n" +
-                "  \"minImpact\": \"medium\"\n" +
+                "  \"country\": \"united states\",\n" +
+                "  \"fromDate\": \"" + fromDate + "\",\n" +
+                "  \"importances\": \"high\",\n" +
+                "  \"timeFilter\": \"time_only\",\n" +
+                "  \"toDate\": \"" + toDate + "\"\n" +
                 "}";
 
         HttpRequest request = HttpRequest.newBuilder()
@@ -63,13 +72,13 @@ public class EconomicCalendarService {
         }
 
         for (JsonNode node : events) {
-            // The store actor uses 'currency' (e.g., "USD")
             String currency = node.path("currency").asText("");
             if (!"USD".equalsIgnoreCase(currency)) {
                 continue;
             }
 
-            String title = node.path("title").asText("").toLowerCase().trim();
+            // CRITICAL UPDATE: Investing.com stores the metric name in "event", not "title"
+            String title = node.path("event").asText("").toLowerCase().trim();
             String actualText = cleanString(node.path("actual").asText(""));
             String forecastText = cleanString(node.path("forecast").asText(""));
 
