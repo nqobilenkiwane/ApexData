@@ -39,7 +39,7 @@ public class EconomicCalendarService {
 
         // Provide the input payload expected by the store actor
         String jsonInputBody = "{\n" +
-                "  \"dateRange\": \"thisweek\",\n" +
+                "  \"dateRange\": \"thisWeek\",\n" +
                 "  \"currencies\": [\"USD\"],\n" +
                 "  \"minImpact\": \"medium\"\n" +
                 "}";
