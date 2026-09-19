@@ -69,8 +69,8 @@ public class EngineScheduler {
         }
     }
 
-    // 1. FAST CYCLE: Runs every 15 mins to capture newly released calendar figures
-    @Scheduled(cron = "0 0/15 * * * ?")
+    // Runs once every day at 9:30 PM SAST, catching all US morning data + FOMC
+    @Scheduled(cron = "0 30 21 * * ?", zone = "Africa/Johannesburg")
     public void executeCalendarCycle() {
         System.out.println("\n[SYSTEM] Executing 15-Minute Calendar Poll...");
         try {
