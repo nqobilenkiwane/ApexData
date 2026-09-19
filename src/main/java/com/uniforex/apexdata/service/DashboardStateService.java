@@ -3,7 +3,7 @@ package com.uniforex.apexdata.service;
 import com.uniforex.apexdata.CompositeScoringEngine;
 import com.uniforex.apexdata.model.MetricCategory;
 import com.uniforex.apexdata.model.dto.DashboardSummaryResponse;
-import com.uniforex.apexdata.model.dto.GoldSummaryResponse; // Make sure you created this file
+import com.uniforex.apexdata.model.dto.GoldSummaryResponse;
 import com.uniforex.apexdata.model.MarketMetric;
 import com.uniforex.apexdata.model.entity.HistoricalScoreEntity;
 import com.uniforex.apexdata.repository.HistoricalScoreRepository;
@@ -11,16 +11,16 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Service
 public class DashboardStateService {
 
     private DashboardSummaryResponse latestSummary;
-    private GoldSummaryResponse latestGoldSummary; // Swapped to the new DTO
+    private GoldSummaryResponse latestGoldSummary;
 
     @Autowired
     private HistoricalScoreRepository historicalScoreRepository;
@@ -31,7 +31,8 @@ public class DashboardStateService {
     public void setLatestGoldSummary(GoldSummaryResponse latestGoldSummary) { this.latestGoldSummary = latestGoldSummary; }
 
     /**
-     * Orchestrates the Gold fetching and scoring pipeline.
+     * Orchestrates the Gold fetching and scoring pipeline using a hybrid approach:
+     * Inverted USD Macro/Yields + Dedicated Gold Institutional & Technical Data.
      */
     public void updateGoldPipeline(CftcService cftcService, TechnicalService technicalService, CompositeScoringEngine scoringEngine) {
         System.out.println("Executing Gold (XAUUSD) Data Pipeline...");
@@ -41,64 +42,60 @@ public class DashboardStateService {
                 return;
             }
 
-            CftcService.GoldCotData goldCot = cftcService.fetchGoldCotData();
-            TechnicalService.AssetTechnicalData goldTech = technicalService.fetchGoldTechnicals();
+            List<MarketMetric> finalGoldMetrics = new ArrayList<>();
 
-            int usdMacroSubtotal = scoringEngine.calculateMacroSubtotal(latestSummary.metrics());
-
-            int cotScore = scoringEngine.scoreGoldCot(
-                    goldCot.nonCommercialLongs(),
-                    goldCot.nonCommercialShorts(),
-                    goldCot.previousNetPosition()
-            );
-
-            int techScore = scoringEngine.scoreTechnicals(
-                    goldTech.currentPrice(),
-                    goldTech.sma200(),
-                    goldTech.rsi14()
-            );
-
-            int finalScore = scoringEngine.calculateGoldCompositeScore(usdMacroSubtotal, cotScore, techScore);
-            String bias = scoringEngine.getOverallBiasLabel(finalScore);
-
-            // --- 1. INVERT THE RAW METRICS ---
-            List<MarketMetric> invertedMetrics = latestSummary.metrics().stream()
-                    .map(m -> new MarketMetric(
-                            m.name(),
-                            m.actualValue(),
-                            m.forecastValue(),
-                            m.scoreDelta() * -1, // Flips +1 to -1, and -1 to +1
-                            m.category()
-
-                    ))
-                    .collect(Collectors.toList());
-
-//            // --- 2. INVERT THE CATEGORY TOTALS ---
-//            Map<String, Integer> invertedCategories = new HashMap<>();
-//            if (latestSummary.categoryScores() != null) {
-//                for (Map.Entry<MetricCategory, Integer> entry : latestSummary.categoryScores().entrySet()) {
-//                    invertedCategories.put(entry.getKey(), entry.getValue() * -1);
-//                }
-//            }
-
-            // --- 2. INVERT THE CATEGORY TOTALS ---
-            Map<String, Integer> invertedCategories = new HashMap<>();
-            if (latestSummary.categoryScores() != null) {
-                for (Map.Entry<MetricCategory, Integer> entry : latestSummary.categoryScores().entrySet()) {
-                    // Convert the MetricCategory enum to a String using .name()
-                    invertedCategories.put(entry.getKey().name(), entry.getValue() * -1);
+            // --- 1. INVERT USD MACRO & YIELDS (Growth, Jobs, Inflation, Capital Flows) ---
+            for (MarketMetric usd : latestSummary.metrics()) {
+                if (scoringEngine.isMacroCategory(usd.category()) || usd.category() == MetricCategory.CAPITAL_FLOWS) {
+                    finalGoldMetrics.add(new MarketMetric(
+                            usd.name(),
+                            usd.actualValue(),
+                            usd.forecastValue(),
+                            usd.scoreDelta() * -1, // Flip the score for Gold
+                            usd.category()
+                    ));
                 }
             }
 
-            // --- 3. SAVE TO THE NEW DTO ---
+            // --- 2. ADD REAL GOLD INSTITUTIONAL DATA (COMEX 088691) ---
+            List<MarketMetric> goldCotMetrics = cftcService.fetchGoldInstitutionalData();
+            List<MarketMetric> scoredGoldCot = scoringEngine.applyScores(goldCotMetrics);
+            finalGoldMetrics.addAll(scoredGoldCot);
+
+            // --- 3. ADD REAL GOLD TECHNICALS (GC=F) ---
+            TechnicalService.AssetTechnicalData goldTechs = technicalService.fetchGoldTechnicals();
+            int goldTechScore = scoringEngine.scoreTechnicals(goldTechs.currentPrice(), goldTechs.sma200(), goldTechs.rsi14());
+            finalGoldMetrics.add(new MarketMetric("Technical Momentum", goldTechs.currentPrice(), 0.0, goldTechScore, MetricCategory.TECHNICALS));
+
+            // --- 4. CALCULATE TOP COMPOSITE HEADER SCORES ---
+            CftcService.GoldCotData topLevelCot = cftcService.fetchGoldCotData();
+            int cotScore = scoringEngine.scoreGoldCot(
+                    topLevelCot.nonCommercialLongs(),
+                    topLevelCot.nonCommercialShorts(),
+                    topLevelCot.previousNetPosition()
+            );
+
+            int usdMacroSubtotal = scoringEngine.calculateMacroSubtotal(latestSummary.metrics());
+            int finalScore = scoringEngine.calculateGoldCompositeScore(usdMacroSubtotal, cotScore, goldTechScore);
+            String bias = scoringEngine.getOverallBiasLabel(finalScore);
+
+            // --- 5. RECALCULATE CATEGORY TOTALS FOR GOLD ---
+            // Build fresh category sums using the newly assembled Gold metrics list
+            Map<String, Integer> goldCategoryScores = new HashMap<>();
+            for (MarketMetric m : finalGoldMetrics) {
+                String catName = m.category().name();
+                goldCategoryScores.put(catName, goldCategoryScores.getOrDefault(catName, 0) + m.scoreDelta());
+            }
+
+            // --- 6. SAVE TO THE GOLD DTO ---
             this.latestGoldSummary = new GoldSummaryResponse(
                     finalScore,
                     bias,
                     usdMacroSubtotal * -1,
                     cotScore,
-                    techScore,
-                    invertedCategories,
-                    invertedMetrics
+                    goldTechScore,
+                    goldCategoryScores,
+                    finalGoldMetrics
             );
 
             System.out.println("Gold Pipeline completed successfully: " + finalScore + " (" + bias + ")");
