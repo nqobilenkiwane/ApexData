@@ -110,7 +110,7 @@ function App() {
   if (isGold && goldSummary) {
     activePillars = [
       { name: 'USD Macro Inversion', score: goldSummary.invertedMacroBaseline },
-      { name: 'COT Sentiment', score: goldSummary.cotScore },
+      { name: 'Positioning & Flows', score: goldSummary.cotScore },
       { name: 'Technical Momentum', score: goldSummary.technicalScore }
     ];
   } else if (!isGold && summary) {
