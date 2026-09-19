@@ -44,9 +44,14 @@ public class DashboardStateService {
 
             List<MarketMetric> finalGoldMetrics = new ArrayList<>();
 
-            // --- 1. INVERT USD MACRO & YIELDS (Growth, Jobs, Inflation, Capital Flows) ---
+            // --- 1. INVERT USD MACRO & YIELDS (Strict Whitelist) ---
             for (MarketMetric usd : latestSummary.metrics()) {
-                if (scoringEngine.isMacroCategory(usd.category()) || usd.category() == MetricCategory.CAPITAL_FLOWS) {
+                MetricCategory cat = usd.category();
+                if (cat == MetricCategory.ECONOMIC_GROWTH ||
+                        cat == MetricCategory.JOB_MARKET ||
+                        cat == MetricCategory.INFLATION ||
+                        cat == MetricCategory.CAPITAL_FLOWS) {
+
                     finalGoldMetrics.add(new MarketMetric(
                             usd.name(),
                             usd.actualValue(),
