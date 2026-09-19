@@ -14,10 +14,6 @@ import java.net.http.HttpResponse;
 import java.util.Arrays;
 import java.util.List;
 
-/**
- * Service responsible for fetching and analyzing institutional market positioning data
- * from the Commodity Futures Trading Commission (CFTC).
- */
 @Service
 public class CftcService {
 
@@ -25,9 +21,6 @@ public class CftcService {
     private final ObjectMapper mapper;
     private final HttpClient httpClient;
 
-    /**
-     * Initializes the CFTC service with necessary network dependencies.
-     */
     public CftcService(MarketDataClient client, ObjectMapper mapper) {
         this.client = client;
         this.mapper = mapper;
@@ -35,10 +28,26 @@ public class CftcService {
     }
 
     /**
-     * Fetches the latest two weeks of Commitments of Traders (COT) data for the USD Index (098662).
+     * Fetches COT positioning for USD Index (098662).
      */
     public List<MarketMetric> fetchInstitutionalData() throws Exception {
-        String url = "https://publicreporting.cftc.gov/resource/6dca-aqww.json?cftc_contract_market_code=098662&$order=report_date_as_yyyy_mm_dd%20DESC&$limit=2";
+        return fetchCotMetrics("098662");
+    }
+
+    /**
+     * Fetches COT positioning for COMEX Gold Futures (088691) as MarketMetrics.
+     * Uses standard metric names so CompositeScoringEngine.applyScores() works seamlessly.
+     */
+    public List<MarketMetric> fetchGoldInstitutionalData() throws Exception {
+        return fetchCotMetrics("088691");
+    }
+
+    /**
+     * Reusable COT fetcher. Leaves scoring to CompositeScoringEngine.
+     */
+    private List<MarketMetric> fetchCotMetrics(String contractCode) throws Exception {
+        String url = "https://publicreporting.cftc.gov/resource/6dca-aqww.json?cftc_contract_market_code="
+                + contractCode + "&$order=report_date_as_yyyy_mm_dd%20DESC&$limit=2";
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
@@ -49,7 +58,7 @@ public class CftcService {
         JsonNode root = mapper.readTree(response.body());
 
         if (root.isEmpty() || root.size() < 2) {
-            throw new RuntimeException("Insufficient CFTC data returned from Socrata API");
+            throw new RuntimeException("Insufficient CFTC data returned for code " + contractCode);
         }
 
         JsonNode currentWeek = root.get(0);
@@ -72,8 +81,7 @@ public class CftcService {
     }
 
     /**
-     * Fetches COT positioning specifically for COMEX Gold Futures (088691).
-     * Extracts raw long/short contracts to feed into the Gold composite scoring engine.
+     * Preserved for CompositeScoringEngine.scoreGoldCot(...) in the top scorecard banner.
      */
     public GoldCotData fetchGoldCotData() throws Exception {
         String url = "https://publicreporting.cftc.gov/resource/6dca-aqww.json?cftc_contract_market_code=088691&$order=report_date_as_yyyy_mm_dd%20DESC&$limit=2";
@@ -102,8 +110,5 @@ public class CftcService {
         return new GoldCotData(currentLong, currentShort, previousNet);
     }
 
-    /**
-     * Immutable data carrier for Gold institutional positioning.
-     */
     public record GoldCotData(long nonCommercialLongs, long nonCommercialShorts, long previousNetPosition) {}
 }
