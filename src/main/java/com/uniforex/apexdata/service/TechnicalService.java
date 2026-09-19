@@ -2,7 +2,6 @@ package com.uniforex.apexdata.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.uniforex.apexdata.MarketDataClient;
 import org.springframework.stereotype.Service;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.BaseBarSeriesBuilder;
@@ -10,6 +9,10 @@ import org.ta4j.core.indicators.RSIIndicator;
 import org.ta4j.core.indicators.SMAIndicator;
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -17,21 +20,21 @@ import java.time.ZonedDateTime;
 @Service
 public class TechnicalService {
 
-    private final MarketDataClient client;
+    private final HttpClient httpClient;
     private final ObjectMapper mapper;
 
-    public TechnicalService(MarketDataClient client, ObjectMapper mapper) {
-        this.client = client;
+    public TechnicalService(ObjectMapper mapper) {
+        this.httpClient = HttpClient.newHttpClient();
         this.mapper = mapper;
     }
 
     /**
-     * Fetches historical daily bars for US Dollar Index Futures (DX=F)
+     * Fetches historical daily bars for US Dollar Index (DX-Y.NYB)
      * and computes 200 SMA and 14 RSI natively via ta4j.
      */
     public AssetTechnicalData fetchUsdTechnicals() {
         try {
-            return fetchSeriesAndCalculateMetrics("DX=F");
+            return fetchSeriesAndCalculateMetrics("DX-Y.NYB");
         } catch (Exception e) {
             throw new RuntimeException("Failed to fetch USD technicals from Yahoo Finance: " + e.getMessage(), e);
         }
@@ -51,8 +54,21 @@ public class TechnicalService {
 
     private AssetTechnicalData fetchSeriesAndCalculateMetrics(String ticker) throws Exception {
         String url = "https://query1.finance.yahoo.com/v8/finance/chart/" + ticker + "?range=1y&interval=1d";
-        String response = client.fetchRawJson(url);
-        JsonNode root = mapper.readTree(response);
+
+        // Use native HttpClient to append the required User-Agent header
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("User-Agent", "Mozilla/5.0")
+                .GET()
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() != 200) {
+            throw new RuntimeException("Yahoo Finance returned status: " + response.statusCode());
+        }
+
+        JsonNode root = mapper.readTree(response.body());
         JsonNode result = root.path("chart").path("result").get(0);
 
         JsonNode timestamps = result.path("timestamp");
