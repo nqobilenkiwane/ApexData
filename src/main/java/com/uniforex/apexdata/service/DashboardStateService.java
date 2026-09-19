@@ -62,7 +62,7 @@ public class DashboardStateService {
                 }
             }
 
-            // --- 2. ADD REAL GOLD INSTITUTIONAL DATA (COMEX 088691) ---
+            // --- 2. ADD REAL GOLD INSTITUTIONAL ACTIVITY (COMEX 088691) ---
             List<MarketMetric> goldCotMetrics = cftcService.fetchGoldInstitutionalData();
             List<MarketMetric> scoredGoldCot = scoringEngine.applyScores(goldCotMetrics);
             finalGoldMetrics.addAll(scoredGoldCot);
@@ -72,33 +72,34 @@ public class DashboardStateService {
             int goldTechScore = scoringEngine.scoreTechnicals(goldTechs.currentPrice(), goldTechs.sma200(), goldTechs.rsi14());
             finalGoldMetrics.add(new MarketMetric("Technical Momentum", goldTechs.currentPrice(), 0.0, goldTechScore, MetricCategory.TECHNICALS));
 
-            // --- 4. CALCULATE TOP COMPOSITE HEADER SCORES ---
-            CftcService.GoldCotData topLevelCot = cftcService.fetchGoldCotData();
-            int cotScore = scoringEngine.scoreGoldCot(
-                    topLevelCot.nonCommercialLongs(),
-                    topLevelCot.nonCommercialShorts(),
-                    topLevelCot.previousNetPosition()
-            );
-
-            int usdMacroSubtotal = scoringEngine.calculateMacroSubtotal(latestSummary.metrics());
-            int finalScore = scoringEngine.calculateGoldCompositeScore(usdMacroSubtotal, cotScore, goldTechScore);
-            String bias = scoringEngine.getOverallBiasLabel(finalScore);
-
-            // --- 5. RECALCULATE CATEGORY TOTALS FOR GOLD ---
-            // Build fresh category sums using the newly assembled Gold metrics list
+            // --- 4. CALCULATE BASE CATEGORY TOTALS FIRST ---
             Map<String, Integer> goldCategoryScores = new HashMap<>();
             for (MarketMetric m : finalGoldMetrics) {
                 String catName = m.category().name();
                 goldCategoryScores.put(catName, goldCategoryScores.getOrDefault(catName, 0) + m.scoreDelta());
             }
 
+            // --- 5. AGGREGATE TOP COMPOSITE HEADER BUCKETS (Mirrors USD Architecture) ---
+            int macroHealth = goldCategoryScores.getOrDefault("ECONOMIC_GROWTH", 0)
+                    + goldCategoryScores.getOrDefault("JOB_MARKET", 0)
+                    + goldCategoryScores.getOrDefault("INFLATION", 0);
+
+            int positioningAndFlows = goldCategoryScores.getOrDefault("INSTITUTIONAL_ACTIVITY", 0)
+                    + goldCategoryScores.getOrDefault("CAPITAL_FLOWS", 0);
+
+            int technicalMomentum = goldCategoryScores.getOrDefault("TECHNICALS", 0);
+
+            // Calculate final bias using the perfectly synchronized buckets
+            int finalScore = macroHealth + positioningAndFlows + technicalMomentum;
+            String bias = scoringEngine.getOverallBiasLabel(finalScore);
+
             // --- 6. SAVE TO THE GOLD DTO ---
             this.latestGoldSummary = new GoldSummaryResponse(
                     finalScore,
                     bias,
-                    usdMacroSubtotal * -1,
-                    cotScore,
-                    goldTechScore,
+                    macroHealth,
+                    positioningAndFlows,
+                    technicalMomentum,
                     goldCategoryScores,
                     finalGoldMetrics
             );
