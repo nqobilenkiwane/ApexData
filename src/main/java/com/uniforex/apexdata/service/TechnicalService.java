@@ -52,6 +52,30 @@ public class TechnicalService {
         }
     }
 
+    /**
+     * Fetches historical daily bars for E-Mini Nasdaq 100 Futures (NQ=F)
+     * and computes 200 SMA and 14 RSI natively via ta4j.
+     */
+    public AssetTechnicalData fetchNasdaqTechnicals() {
+        try {
+            return fetchSeriesAndCalculateMetrics("NQ=F");
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to fetch Nasdaq technicals from Yahoo Finance: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Fetches historical daily bars for E-Mini Dow Jones Futures (YM=F)
+     * and computes 200 SMA and 14 RSI natively via ta4j.
+     */
+    public AssetTechnicalData fetchDowTechnicals() {
+        try {
+            return fetchSeriesAndCalculateMetrics("YM=F");
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to fetch US30 technicals from Yahoo Finance: " + e.getMessage(), e);
+        }
+    }
+
     private AssetTechnicalData fetchSeriesAndCalculateMetrics(String ticker) throws Exception {
         String url = "https://query1.finance.yahoo.com/v8/finance/chart/" + ticker + "?range=1y&interval=1d";
 

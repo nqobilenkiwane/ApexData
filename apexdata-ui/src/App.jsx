@@ -6,9 +6,11 @@ function App() {
   const [summary, setSummary] = useState(null)
   const [history, setHistory] = useState([])
   const [goldSummary, setGoldSummary] = useState(null)
+  const [nasdaqSummary, setNasdaqSummary] = useState(null)
+  const [dowSummary, setDowSummary] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  // New state to manage the dropdown selection
+  // State to manage the dropdown selection
   const [activeAsset, setActiveAsset] = useState('DXY')
 
   useEffect(() => {
@@ -26,11 +28,21 @@ function App() {
       fetch(`${baseUrl}/api/dashboard/gold`).then(res => {
         if (!res.ok) return null;
         return res.json();
+      }).catch(() => null),
+      fetch(`${baseUrl}/api/dashboard/nasdaq`).then(res => {
+        if (!res.ok) return null;
+        return res.json();
+      }).catch(() => null),
+      fetch(`${baseUrl}/api/dashboard/dow`).then(res => {
+        if (!res.ok) return null;
+        return res.json();
       }).catch(() => null)
     ])
-      .then(([summaryData, historyData, goldData]) => {
+      .then(([summaryData, historyData, goldData, nasdaqData, dowData]) => {
         setSummary(summaryData);
         setGoldSummary(goldData);
+        setNasdaqSummary(nasdaqData);
+        setDowSummary(dowData);
 
         if (Array.isArray(historyData)) {
           const formattedHistory = historyData.map(item => ({
@@ -99,32 +111,55 @@ function App() {
       'TECHNICALS'
   ];
 
-  // Dynamic values for the Active Summary Card based on dropdown selection
-  const isGold = activeAsset === 'XAUUSD';
-  const activeSummaryData = isGold ? goldSummary : summary;
+  // Map the active asset data
+  let activeSummaryData = summary;
+  if (activeAsset === 'XAUUSD') activeSummaryData = goldSummary;
+  if (activeAsset === 'NAS100') activeSummaryData = nasdaqSummary;
+  if (activeAsset === 'US30') activeSummaryData = dowSummary;
+
   const activeScore = activeSummaryData?.totalScore ?? 0;
   const activeBias = activeSummaryData?.biasLabel || activeSummaryData?.overallBias || 'NEUTRAL';
 
-  // Construct the 3 pillars based on the selected asset
+  // Construct the 3 pillars dynamically based on the selected asset
   let activePillars = [];
-  if (isGold && goldSummary) {
+  if (activeAsset === 'XAUUSD' && goldSummary) {
     activePillars = [
-      { name: 'USD Macro Inversion', score: goldSummary.invertedMacroBaseline },
-      { name: 'Positioning & Flows', score: goldSummary.cotScore },
-      { name: 'Technical Momentum', score: goldSummary.technicalScore }
+      { name: 'USD Macro Inversion', score: goldSummary.macroHealth ?? 0 },
+      { name: 'Positioning & Flows', score: goldSummary.positioningAndFlows ?? 0 },
+      { name: 'Technical Momentum', score: goldSummary.technicalMomentum ?? 0 }
     ];
-  } else if (!isGold && summary) {
+  } else if (activeAsset === 'NAS100' && nasdaqSummary) {
     activePillars = [
-      { name: 'Economic Health', score: (summary.categoryScores.ECONOMIC_GROWTH || 0) + (summary.categoryScores.JOB_MARKET || 0) + (summary.categoryScores.INFLATION || 0) },
-      { name: 'Positioning & Flows', score: (summary.categoryScores.CAPITAL_FLOWS || 0) + (summary.categoryScores.INSTITUTIONAL_ACTIVITY || 0) },
-      { name: 'Technical Momentum', score: (summary.categoryScores.TECHNICALS || 0) }
+      { name: 'Economic Health', score: nasdaqSummary.macroHealth ?? 0 },
+      { name: 'Positioning & Flows', score: nasdaqSummary.positioningAndFlows ?? 0 },
+      { name: 'Technical Momentum', score: nasdaqSummary.technicalMomentum ?? 0 }
+    ];
+  } else if (activeAsset === 'US30' && dowSummary) {
+    activePillars = [
+      { name: 'Economic Health', score: dowSummary.macroHealth ?? 0 },
+      { name: 'Positioning & Flows', score: dowSummary.positioningAndFlows ?? 0 },
+      { name: 'Technical Momentum', score: dowSummary.technicalMomentum ?? 0 }
+    ];
+  } else if (summary) {
+    // Default USD layout
+    activePillars = [
+      { name: 'Economic Health', score: (summary.categoryScores?.ECONOMIC_GROWTH || 0) + (summary.categoryScores?.JOB_MARKET || 0) + (summary.categoryScores?.INFLATION || 0) },
+      { name: 'Positioning & Flows', score: (summary.categoryScores?.CAPITAL_FLOWS || 0) + (summary.categoryScores?.INSTITUTIONAL_ACTIVITY || 0) },
+      { name: 'Technical Momentum', score: (summary.categoryScores?.TECHNICALS || 0) }
     ];
   }
 
-  // Fix the filter to match what your Spring Boot backend saves in the database
-  const activeHistory = history.filter(item =>
-    isGold ? item.currency === 'XAUUSD' : (item.currency === 'USD' || !item.currency)
-  );
+  // Filter history based on active asset
+  const activeHistory = history.filter(item => {
+    if (activeAsset === 'DXY') return item.currency === 'USD' || !item.currency;
+    return item.currency === activeAsset;
+  });
+
+  // Dynamic chart title
+  const chartTitle = activeAsset === 'XAUUSD' ? 'GOLD MACRO TREND' :
+                     activeAsset === 'NAS100' ? 'NASDAQ 100 MACRO TREND' :
+                     activeAsset === 'US30' ? 'US30 MACRO TREND' :
+                     'USD MACRO TREND';
 
   return (
     <div style={styles.container}>
@@ -143,6 +178,8 @@ function App() {
             >
               <option value="DXY" style={{ backgroundColor: '#111111' }}>US DOLLAR (DXY)</option>
               {goldSummary && <option value="XAUUSD" style={{ backgroundColor: '#111111' }}>GOLD (XAUUSD)</option>}
+              {nasdaqSummary && <option value="NAS100" style={{ backgroundColor: '#111111' }}>NASDAQ 100</option>}
+              {dowSummary && <option value="US30" style={{ backgroundColor: '#111111' }}>US30 (DOW)</option>}
             </select>
 
             <span style={{ fontSize: '2.5rem', fontWeight: '900', color: getCompositeScoreColor(activeScore) }}>
@@ -174,7 +211,7 @@ function App() {
       {activeHistory.length > 0 && (
         <div style={styles.chartSection}>
           <div style={styles.cardHeader}>
-            <h2 style={styles.cardTitle}>{isGold ? 'GOLD MACRO TREND' : 'USD MACRO TREND'}</h2>
+            <h2 style={styles.cardTitle}>{chartTitle}</h2>
           </div>
           <div style={styles.chartWrapper}>
             <ResponsiveContainer width="100%" height="100%">
@@ -198,7 +235,6 @@ function App() {
       {/* METRICS GRID */}
       <div style={styles.grid}>
         {CATEGORY_ORDER.map((category) => {
-          // 1. Read from activeSummaryData, NOT summary
           const catScore = activeSummaryData?.categoryScores?.[category];
           if (catScore === undefined) return null;
 
@@ -211,7 +247,6 @@ function App() {
                 </span>
               </div>
               <div style={styles.metricList}>
-                {/* 2. Read from activeSummaryData.metrics, NOT summary.metrics */}
                 {activeSummaryData?.metrics
                   ?.filter(m => m.category === category)
                   .map(metric => (

@@ -75,6 +75,40 @@ public class DashboardController {
         }
     }
 
+    @GetMapping("/nasdaq")
+    public ResponseEntity<?> getNasdaqSummary() {
+        try {
+            GoldSummaryResponse nasdaqSummary = stateService.getLatestNasdaqSummary();
+            if (nasdaqSummary == null) {
+                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                        .body("Nasdaq engine has not completed first cycle yet.");
+            }
+            return ResponseEntity.ok(nasdaqSummary);
+        } catch (Exception e) {
+            System.err.println("[CRITICAL ERROR] Failed to fetch Nasdaq summary:");
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/dow")
+    public ResponseEntity<?> getDowSummary() {
+        try {
+            GoldSummaryResponse dowSummary = stateService.getLatestDowSummary();
+            if (dowSummary == null) {
+                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                        .body("US30 engine has not completed first cycle yet.");
+            }
+            return ResponseEntity.ok(dowSummary);
+        } catch (Exception e) {
+            System.err.println("[CRITICAL ERROR] Failed to fetch US30 summary:");
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error: " + e.getMessage());
+        }
+    }
+
     @GetMapping("/history")
     public ResponseEntity<?> getHistoricalScores() {
         try {

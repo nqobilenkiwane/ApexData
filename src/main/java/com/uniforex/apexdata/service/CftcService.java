@@ -43,6 +43,23 @@ public class CftcService {
     }
 
     /**
+     * Fetches COT positioning for E-Mini Nasdaq 100 Futures (20974+).
+     * Uses standard metric names so CompositeScoringEngine.applyScores() works seamlessly.
+     */
+    public List<MarketMetric> fetchNasdaqInstitutionalData() throws Exception {
+        // The '+' sign must be URL-encoded as '%2B' so the Socrata API doesn't read it as a space.
+        return fetchCotMetrics("20974%2B");
+    }
+
+    /**
+     * Fetches COT positioning for E-Mini Dow Jones Futures (12460+).
+     * Uses standard metric names so CompositeScoringEngine.applyScores() works seamlessly.
+     */
+    public List<MarketMetric> fetchDowInstitutionalData() throws Exception {
+        return fetchCotMetrics("12460%2B");
+    }
+
+    /**
      * Reusable COT fetcher. Leaves scoring to CompositeScoringEngine.
      */
     private List<MarketMetric> fetchCotMetrics(String contractCode) throws Exception {
