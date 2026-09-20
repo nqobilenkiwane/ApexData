@@ -120,25 +120,25 @@ function App() {
   const activeScore = activeSummaryData?.totalScore ?? 0;
   const activeBias = activeSummaryData?.biasLabel || activeSummaryData?.overallBias || 'NEUTRAL';
 
-  // Construct the 3 pillars dynamically based on the selected asset
+// Construct the 3 pillars dynamically based on the selected asset
   let activePillars = [];
   if (activeAsset === 'XAUUSD' && goldSummary) {
     activePillars = [
-      { name: 'USD Macro Inversion', score: goldSummary.macroHealth ?? 0 },
-      { name: 'Positioning & Flows', score: goldSummary.positioningAndFlows ?? 0 },
-      { name: 'Technical Momentum', score: goldSummary.technicalMomentum ?? 0 }
+      { name: 'USD Macro Inversion', score: goldSummary.invertedMacroBaseline ?? goldSummary.macroHealth ?? 0 },
+      { name: 'Positioning & Flows', score: goldSummary.cotScore ?? goldSummary.positioningAndFlows ?? 0 },
+      { name: 'Technical Momentum', score: goldSummary.technicalScore ?? goldSummary.technicalMomentum ?? 0 }
     ];
   } else if (activeAsset === 'NAS100' && nasdaqSummary) {
     activePillars = [
-      { name: 'Economic Health', score: nasdaqSummary.macroHealth ?? 0 },
-      { name: 'Positioning & Flows', score: nasdaqSummary.positioningAndFlows ?? 0 },
-      { name: 'Technical Momentum', score: nasdaqSummary.technicalMomentum ?? 0 }
+      { name: 'Economic Health', score: nasdaqSummary.invertedMacroBaseline ?? nasdaqSummary.macroHealth ?? 0 },
+      { name: 'Positioning & Flows', score: nasdaqSummary.cotScore ?? nasdaqSummary.positioningAndFlows ?? 0 },
+      { name: 'Technical Momentum', score: nasdaqSummary.technicalScore ?? nasdaqSummary.technicalMomentum ?? 0 }
     ];
   } else if (activeAsset === 'US30' && dowSummary) {
     activePillars = [
-      { name: 'Economic Health', score: dowSummary.macroHealth ?? 0 },
-      { name: 'Positioning & Flows', score: dowSummary.positioningAndFlows ?? 0 },
-      { name: 'Technical Momentum', score: dowSummary.technicalMomentum ?? 0 }
+      { name: 'Economic Health', score: dowSummary.invertedMacroBaseline ?? dowSummary.macroHealth ?? 0 },
+      { name: 'Positioning & Flows', score: dowSummary.cotScore ?? dowSummary.positioningAndFlows ?? 0 },
+      { name: 'Technical Momentum', score: dowSummary.technicalScore ?? dowSummary.technicalMomentum ?? 0 }
     ];
   } else if (summary) {
     // Default USD layout
