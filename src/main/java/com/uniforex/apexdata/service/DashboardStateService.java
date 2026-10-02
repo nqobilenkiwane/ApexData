@@ -21,6 +21,7 @@ public class DashboardStateService {
 
     private DashboardSummaryResponse latestSummary;
     private GoldSummaryResponse latestGoldSummary;
+    private GoldSummaryResponse latestSilverSummary;
     private GoldSummaryResponse latestNasdaqSummary;
     private GoldSummaryResponse latestDowSummary;
 
@@ -32,6 +33,9 @@ public class DashboardStateService {
 
     public GoldSummaryResponse getLatestGoldSummary() { return latestGoldSummary; }
     public void setLatestGoldSummary(GoldSummaryResponse latestGoldSummary) { this.latestGoldSummary = latestGoldSummary; }
+
+    public GoldSummaryResponse getLatestSilverSummary() { return latestSilverSummary; }
+    public void setLatestSilverSummary(GoldSummaryResponse latestSilverSummary) { this.latestSilverSummary = latestSilverSummary; }
 
     public GoldSummaryResponse getLatestNasdaqSummary() { return latestNasdaqSummary; }
     public void setLatestNasdaqSummary(GoldSummaryResponse latestNasdaqSummary) { this.latestNasdaqSummary = latestNasdaqSummary; }
@@ -111,6 +115,82 @@ public class DashboardStateService {
             System.out.println("Gold Pipeline completed successfully: " + finalScore + " (" + bias + ")");
         } catch (Exception e) {
             System.err.println("Failed to update Gold pipeline: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Orchestrates the Silver fetching and scoring pipeline using a hybrid approach:
+     * Inverted USD Macro/Yields + Dedicated Silver Institutional & Technical Data.
+     */
+    public void updateSilverPipeline(CftcService cftcService, TechnicalService technicalService, CompositeScoringEngine scoringEngine) {
+        System.out.println("Executing Silver (XAGUSD) Data Pipeline...");
+        try {
+            if (latestSummary == null) {
+                System.out.println("Cannot update Silver: USD Macro Summary is null.");
+                return;
+            }
+
+            List<MarketMetric> finalSilverMetrics = new ArrayList<>();
+
+            // --- 1. INVERT USD MACRO & YIELDS (Strict Whitelist) ---
+            for (MarketMetric usd : latestSummary.metrics()) {
+                MetricCategory cat = usd.category();
+                if (cat == MetricCategory.ECONOMIC_GROWTH ||
+                        cat == MetricCategory.JOB_MARKET ||
+                        cat == MetricCategory.INFLATION ||
+                        cat == MetricCategory.CAPITAL_FLOWS) {
+
+                    finalSilverMetrics.add(new MarketMetric(
+                            usd.name(),
+                            usd.actualValue(),
+                            usd.forecastValue(),
+                            usd.scoreDelta() * -1, // Flip score for Silver
+                            usd.category()
+                    ));
+                }
+            }
+
+            // --- 2. ADD REAL SILVER INSTITUTIONAL ACTIVITY (COMEX 084691) ---
+            List<MarketMetric> silverCotMetrics = cftcService.fetchSilverInstitutionalData();
+            List<MarketMetric> scoredSilverCot = scoringEngine.applyScores(silverCotMetrics);
+            finalSilverMetrics.addAll(scoredSilverCot);
+
+            // --- 3. ADD REAL SILVER TECHNICALS (SI=F) ---
+            TechnicalService.AssetTechnicalData silverTechs = technicalService.fetchSilverTechnicals();
+            int silverTechScore = scoringEngine.scoreTechnicals(silverTechs.currentPrice(), silverTechs.sma200(), silverTechs.rsi14());
+            finalSilverMetrics.add(new MarketMetric("Technical Momentum", silverTechs.currentPrice(), 0.0, silverTechScore, MetricCategory.TECHNICALS));
+
+            // --- 4. BASE CATEGORY TOTALS ---
+            Map<String, Integer> silverCategoryScores = calculateCategoryTotals(finalSilverMetrics);
+
+            // --- 5. AGGREGATE TOP COMPOSITE HEADER BUCKETS ---
+            int macroHealth = silverCategoryScores.getOrDefault("ECONOMIC_GROWTH", 0)
+                    + silverCategoryScores.getOrDefault("JOB_MARKET", 0)
+                    + silverCategoryScores.getOrDefault("INFLATION", 0);
+
+            int positioningAndFlows = silverCategoryScores.getOrDefault("INSTITUTIONAL_ACTIVITY", 0)
+                    + silverCategoryScores.getOrDefault("CAPITAL_FLOWS", 0);
+
+            int technicalMomentum = silverCategoryScores.getOrDefault("TECHNICALS", 0);
+
+            int finalScore = macroHealth + positioningAndFlows + technicalMomentum;
+            String bias = scoringEngine.getOverallBiasLabel(finalScore);
+
+            // --- 6. SAVE STATE ---
+            this.latestSilverSummary = new GoldSummaryResponse(
+                    finalScore,
+                    bias,
+                    macroHealth,
+                    positioningAndFlows,
+                    technicalMomentum,
+                    silverCategoryScores,
+                    finalSilverMetrics
+            );
+
+            System.out.println("Silver Pipeline completed successfully: " + finalScore + " (" + bias + ")");
+        } catch (Exception e) {
+            System.err.println("Failed to update Silver pipeline: " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -269,6 +349,11 @@ public class DashboardStateService {
         if (latestGoldSummary != null) {
             historicalScoreRepository.save(new HistoricalScoreEntity("XAUUSD", latestGoldSummary.totalScore(), latestGoldSummary.biasLabel()));
             System.out.println("Gold EOD Snapshot saved successfully: " + latestGoldSummary.totalScore() + " (" + latestGoldSummary.biasLabel() + ")");
+        }
+
+        if (latestSilverSummary != null) {
+            historicalScoreRepository.save(new HistoricalScoreEntity("XAGUSD", latestSilverSummary.totalScore(), latestSilverSummary.biasLabel()));
+            System.out.println("Silver EOD Snapshot saved successfully: " + latestSilverSummary.totalScore() + " (" + latestSilverSummary.biasLabel() + ")");
         }
 
         if (latestNasdaqSummary != null) {

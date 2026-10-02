@@ -109,6 +109,19 @@ public class DashboardController {
         }
     }
 
+    @GetMapping("/silver")
+    public ResponseEntity<?> getSilverSummary() {
+        try {
+            GoldSummaryResponse silverSummary = stateService.getLatestSilverSummary();
+            if (silverSummary == null) {
+                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Silver engine initializing.");
+            }
+            return ResponseEntity.ok(silverSummary);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error: " + e.getMessage());
+        }
+    }
+
     @GetMapping("/history")
     public ResponseEntity<?> getHistoricalScores() {
         try {

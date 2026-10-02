@@ -168,10 +168,11 @@ public class EngineScheduler {
         );
         stateService.setLatestSummary(summary);
 
-        // 7. Trigger Gold and Equities Pipeline hooks
+        // 7. Trigger Gold, Silver, and Equities Pipeline hooks
         stateService.updateGoldPipeline(this.cftcService, this.technicalService, this.engine);
+        stateService.updateSilverPipeline(this.cftcService, this.technicalService, this.engine);
         stateService.updateNasdaqPipeline(this.cftcService, this.technicalService, this.engine);
-        stateService.updateDowPipeline(this.cftcService, this.technicalService, this.engine);;
+        stateService.updateDowPipeline(this.cftcService, this.technicalService, this.engine);
 
         System.out.printf("[SYSTEM] Dashboard State Rebuilt. USD Score (%+d / %s).\n", totalScore, overallBias);
     }

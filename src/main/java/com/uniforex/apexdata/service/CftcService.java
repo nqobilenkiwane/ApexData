@@ -60,6 +60,14 @@ public class CftcService {
     }
 
     /**
+     * Fetches COT positioning for COMEX Silver Futures (084691).
+     * Uses standard metric names so CompositeScoringEngine.applyScores() works seamlessly.
+     */
+    public List<MarketMetric> fetchSilverInstitutionalData() throws Exception {
+        return fetchCotMetrics("084691");
+    }
+
+    /**
      * Reusable COT fetcher. Leaves scoring to CompositeScoringEngine.
      */
     private List<MarketMetric> fetchCotMetrics(String contractCode) throws Exception {

@@ -53,6 +53,18 @@ public class TechnicalService {
     }
 
     /**
+     * Fetches historical daily bars for COMEX Silver Futures (SI=F)
+     * and computes 200 SMA and 14 RSI natively via ta4j.
+     */
+    public AssetTechnicalData fetchSilverTechnicals() {
+        try {
+            return fetchSeriesAndCalculateMetrics("SI=F");
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to fetch XAG/USD technicals from Yahoo Finance: " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * Fetches historical daily bars for E-Mini Nasdaq 100 Futures (NQ=F)
      * and computes 200 SMA and 14 RSI natively via ta4j.
      */
@@ -79,7 +91,6 @@ public class TechnicalService {
     private AssetTechnicalData fetchSeriesAndCalculateMetrics(String ticker) throws Exception {
         String url = "https://query1.finance.yahoo.com/v8/finance/chart/" + ticker + "?range=1y&interval=1d";
 
-        // Use native HttpClient to append the required User-Agent header
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("User-Agent", "Mozilla/5.0")

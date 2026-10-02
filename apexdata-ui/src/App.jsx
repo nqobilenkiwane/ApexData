@@ -6,6 +6,7 @@ function App() {
   const [summary, setSummary] = useState(null)
   const [history, setHistory] = useState([])
   const [goldSummary, setGoldSummary] = useState(null)
+  const [silverSummary, setSilverSummary] = useState(null)
   const [nasdaqSummary, setNasdaqSummary] = useState(null)
   const [dowSummary, setDowSummary] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -29,6 +30,10 @@ function App() {
         if (!res.ok) return null;
         return res.json();
       }).catch(() => null),
+      fetch(`${baseUrl}/api/dashboard/silver`).then(res => {
+        if (!res.ok) return null;
+        return res.json();
+      }).catch(() => null),
       fetch(`${baseUrl}/api/dashboard/nasdaq`).then(res => {
         if (!res.ok) return null;
         return res.json();
@@ -38,9 +43,10 @@ function App() {
         return res.json();
       }).catch(() => null)
     ])
-      .then(([summaryData, historyData, goldData, nasdaqData, dowData]) => {
+      .then(([summaryData, historyData, goldData, silverData, nasdaqData, dowData]) => {
         setSummary(summaryData);
         setGoldSummary(goldData);
+        setSilverSummary(silverData);
         setNasdaqSummary(nasdaqData);
         setDowSummary(dowData);
 
@@ -114,19 +120,26 @@ function App() {
   // Map the active asset data
   let activeSummaryData = summary;
   if (activeAsset === 'XAUUSD') activeSummaryData = goldSummary;
+  if (activeAsset === 'XAGUSD') activeSummaryData = silverSummary;
   if (activeAsset === 'NAS100') activeSummaryData = nasdaqSummary;
   if (activeAsset === 'US30') activeSummaryData = dowSummary;
 
   const activeScore = activeSummaryData?.totalScore ?? 0;
   const activeBias = activeSummaryData?.biasLabel || activeSummaryData?.overallBias || 'NEUTRAL';
 
-// Construct the 3 pillars dynamically based on the selected asset
+  // Construct the 3 pillars dynamically based on the selected asset
   let activePillars = [];
   if (activeAsset === 'XAUUSD' && goldSummary) {
     activePillars = [
       { name: 'USD Macro Inversion', score: goldSummary.invertedMacroBaseline ?? goldSummary.macroHealth ?? 0 },
       { name: 'Positioning & Flows', score: goldSummary.cotScore ?? goldSummary.positioningAndFlows ?? 0 },
       { name: 'Technical Momentum', score: goldSummary.technicalScore ?? goldSummary.technicalMomentum ?? 0 }
+    ];
+  } else if (activeAsset === 'XAGUSD' && silverSummary) {
+    activePillars = [
+      { name: 'USD Macro Inversion', score: silverSummary.invertedMacroBaseline ?? silverSummary.macroHealth ?? 0 },
+      { name: 'Positioning & Flows', score: silverSummary.cotScore ?? silverSummary.positioningAndFlows ?? 0 },
+      { name: 'Technical Momentum', score: silverSummary.technicalScore ?? silverSummary.technicalMomentum ?? 0 }
     ];
   } else if (activeAsset === 'NAS100' && nasdaqSummary) {
     activePillars = [
@@ -155,8 +168,9 @@ function App() {
     return item.currency === activeAsset;
   });
 
-  // Dynamic chart title.
+  // Dynamic chart title
   const chartTitle = activeAsset === 'XAUUSD' ? 'GOLD MACRO TREND' :
+                     activeAsset === 'XAGUSD' ? 'SILVER MACRO TREND' :
                      activeAsset === 'NAS100' ? 'NASDAQ 100 MACRO TREND' :
                      activeAsset === 'US30' ? 'US30 MACRO TREND' :
                      'USD MACRO TREND';
@@ -178,6 +192,7 @@ function App() {
             >
               <option value="DXY" style={{ backgroundColor: '#111111' }}>US DOLLAR (DXY)</option>
               {goldSummary && <option value="XAUUSD" style={{ backgroundColor: '#111111' }}>GOLD (XAUUSD)</option>}
+              {silverSummary && <option value="XAGUSD" style={{ backgroundColor: '#111111' }}>SILVER (XAGUSD)</option>}
               {nasdaqSummary && <option value="NAS100" style={{ backgroundColor: '#111111' }}>NASDAQ 100</option>}
               {dowSummary && <option value="US30" style={{ backgroundColor: '#111111' }}>US30 (DOW)</option>}
             </select>
