@@ -155,7 +155,7 @@ function App() {
     return item.currency === activeAsset;
   });
 
-  // Dynamic chart title
+  // Dynamic chart title.
   const chartTitle = activeAsset === 'XAUUSD' ? 'GOLD MACRO TREND' :
                      activeAsset === 'NAS100' ? 'NASDAQ 100 MACRO TREND' :
                      activeAsset === 'US30' ? 'US30 MACRO TREND' :
