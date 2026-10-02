@@ -36,7 +36,7 @@ public class EconomicCalendarService {
 
         System.out.println("[SYSTEM] Attempting calendar fetch via Store Actor (Investing.com)...");
 
-        // The exact Investing.com actor hash ID
+        // The exact Investing.com actor hash ID.
         String apifyUrl = "https://api.apify.com/v2/actors/aaSpP7M39TUNh1Xto/run-sync-get-dataset-items?token=" + apifyToken;
 
         // Generate a rolling 14-day window dynamically so the data never goes stale
