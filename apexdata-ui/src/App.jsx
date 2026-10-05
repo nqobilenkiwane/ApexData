@@ -162,7 +162,7 @@ function App() {
     ];
   }
 
-  // Filter history based on active asset
+  // Filter history based on active asset.
   const activeHistory = history.filter(item => {
     if (activeAsset === 'DXY') return item.currency === 'USD' || !item.currency;
     return item.currency === activeAsset;
