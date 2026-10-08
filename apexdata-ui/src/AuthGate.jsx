@@ -29,7 +29,7 @@ function AuthGate({ children }) {
     );
   }
 
-  // If NOT approved, show the pending screen
+  // If NOT approved, show the pending screen.
   return (
     <div style={styles.unauthorized}>
        <h2 style={{ color: '#ff3366' }}>Access Pending Approval</h2>
