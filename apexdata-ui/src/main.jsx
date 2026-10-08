@@ -2,7 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import AuthGate from './AuthGate.jsx'
-import { ClerkProvider, SignedIn, SignedOut, SignIn } from '@clerk/react'
+import { ClerkProvider, Show, SignIn } from '@clerk/react'
 import './index.css'
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
@@ -16,18 +16,18 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <ClerkProvider publishableKey={PUBLISHABLE_KEY}>
 
       {/* If the user is NOT logged in, show the Clerk Login UI */}
-      <SignedOut>
+      <Show when="signed-out">
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#000' }}>
            <SignIn />
         </div>
-      </SignedOut>
+      </Show>
 
       {/* If the user IS logged in, pass them to the Whitelist Gate */}
-      <SignedIn>
+      <Show when="signed-in">
         <AuthGate>
           <App />
         </AuthGate>
-      </SignedIn>
+      </Show>
 
     </ClerkProvider>
   </React.StrictMode>,
