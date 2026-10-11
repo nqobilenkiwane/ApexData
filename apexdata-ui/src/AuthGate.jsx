@@ -3,7 +3,8 @@ import { useUser, SignOutButton } from "@clerk/react";
 // Add the emails of paying members here
 const WHITELIST_EMAILS = [
   "nqobilenkiwane01@gmail.com",
-  "sibongumusasimelane4@gmail.com"
+  "sibongumusasimelane4@gmail.com",
+  "mabasasiyabonga43@gmail.com"
 ];
 
 function AuthGate({ children }) {
