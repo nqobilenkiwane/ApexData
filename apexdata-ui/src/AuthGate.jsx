@@ -1,6 +1,6 @@
 import { useUser, SignOutButton } from "@clerk/react";
 
-// Add the emails of paying members here
+// Add the emails of paying members here.
 const WHITELIST_EMAILS = [
   "nqobilenkiwane01@gmail.com",
   "sibongumusasimelane4@gmail.com",
