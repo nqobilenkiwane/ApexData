@@ -127,7 +127,7 @@ function App() {
   const activeScore = activeSummaryData?.totalScore ?? 0;
   const activeBias = activeSummaryData?.biasLabel || activeSummaryData?.overallBias || 'NEUTRAL';
 
-  // Construct the 3 pillars dynamically based on the selected asset
+  // Construct the 3 pillars dynamically based on the selected asset.
   let activePillars = [];
   if (activeAsset === 'XAUUSD' && goldSummary) {
     activePillars = [
