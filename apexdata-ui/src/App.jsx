@@ -117,7 +117,7 @@ function App() {
       'TECHNICALS'
   ];
 
-  // Map the active asset data
+  // Map the active asset data.
   let activeSummaryData = summary;
   if (activeAsset === 'XAUUSD') activeSummaryData = goldSummary;
   if (activeAsset === 'XAGUSD') activeSummaryData = silverSummary;
