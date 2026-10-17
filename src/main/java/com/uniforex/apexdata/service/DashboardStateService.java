@@ -24,6 +24,8 @@ public class DashboardStateService {
     private GoldSummaryResponse latestSilverSummary;
     private GoldSummaryResponse latestNasdaqSummary;
     private GoldSummaryResponse latestDowSummary;
+    private GoldSummaryResponse latestSp500Summary;
+    private GoldSummaryResponse latestRussell2000Summary;
 
     @Autowired
     private HistoricalScoreRepository historicalScoreRepository;
@@ -42,6 +44,12 @@ public class DashboardStateService {
 
     public GoldSummaryResponse getLatestDowSummary() { return latestDowSummary; }
     public void setLatestDowSummary(GoldSummaryResponse latestDowSummary) { this.latestDowSummary = latestDowSummary; }
+
+    public GoldSummaryResponse getLatestSp500Summary() { return latestSp500Summary; }
+    public void setLatestSp500Summary(GoldSummaryResponse latestSp500Summary) { this.latestSp500Summary = latestSp500Summary; }
+
+    public GoldSummaryResponse getLatestRussell2000Summary() { return latestRussell2000Summary; }
+    public void setLatestRussell2000Summary(GoldSummaryResponse latestRussell2000Summary) { this.latestRussell2000Summary = latestRussell2000Summary; }
 
     /**
      * Orchestrates the Gold fetching and scoring pipeline using a hybrid approach:
@@ -304,6 +312,114 @@ public class DashboardStateService {
     }
 
     /**
+     * Orchestrates the S&P 500 (ES=F) fetching and scoring pipeline.
+     */
+    public void updateSp500Pipeline(CftcService cftcService, TechnicalService technicalService, CompositeScoringEngine scoringEngine) {
+        System.out.println("Executing S&P 500 (SPX) Data Pipeline...");
+        try {
+            if (latestSummary == null) {
+                System.out.println("Cannot update S&P 500: USD Macro Summary is null.");
+                return;
+            }
+
+            List<MarketMetric> finalSp500Metrics = buildEquityMacroBase(latestSummary.metrics());
+
+            // Add real S&P 500 COT
+            List<MarketMetric> sp500Cot = cftcService.fetchSp500InstitutionalData();
+            finalSp500Metrics.addAll(scoringEngine.applyScores(sp500Cot));
+
+            // Add real S&P 500 Technicals
+            TechnicalService.AssetTechnicalData sp500Tech = technicalService.fetchSp500Technicals();
+            int sp500TechScore = scoringEngine.scoreTechnicals(sp500Tech.currentPrice(), sp500Tech.sma200(), sp500Tech.rsi14());
+            finalSp500Metrics.add(new MarketMetric("Technical Momentum", sp500Tech.currentPrice(), 0.0, sp500TechScore, MetricCategory.TECHNICALS));
+
+            // Calculate category totals and composite buckets
+            Map<String, Integer> sp500CategoryScores = calculateCategoryTotals(finalSp500Metrics);
+
+            int macroHealth = sp500CategoryScores.getOrDefault("ECONOMIC_GROWTH", 0)
+                    + sp500CategoryScores.getOrDefault("JOB_MARKET", 0)
+                    + sp500CategoryScores.getOrDefault("INFLATION", 0);
+
+            int positioningAndFlows = sp500CategoryScores.getOrDefault("INSTITUTIONAL_ACTIVITY", 0)
+                    + sp500CategoryScores.getOrDefault("CAPITAL_FLOWS", 0);
+
+            int technicalMomentum = sp500CategoryScores.getOrDefault("TECHNICALS", 0);
+
+            int finalScore = macroHealth + positioningAndFlows + technicalMomentum;
+            String bias = scoringEngine.getOverallBiasLabel(finalScore);
+
+            this.latestSp500Summary = new GoldSummaryResponse(
+                    finalScore,
+                    bias,
+                    macroHealth,
+                    positioningAndFlows,
+                    technicalMomentum,
+                    sp500CategoryScores,
+                    finalSp500Metrics
+            );
+
+            System.out.println("S&P 500 Pipeline completed successfully: " + finalScore + " (" + bias + ")");
+        } catch (Exception e) {
+            System.err.println("Failed to update S&P 500 pipeline: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Orchestrates the Russell 2000 (RTY=F) fetching and scoring pipeline.
+     */
+    public void updateRussell2000Pipeline(CftcService cftcService, TechnicalService technicalService, CompositeScoringEngine scoringEngine) {
+        System.out.println("Executing Russell 2000 (RUT) Data Pipeline...");
+        try {
+            if (latestSummary == null) {
+                System.out.println("Cannot update Russell 2000: USD Macro Summary is null.");
+                return;
+            }
+
+            List<MarketMetric> finalRussellMetrics = buildEquityMacroBase(latestSummary.metrics());
+
+            // Add real Russell 2000 COT
+            List<MarketMetric> russellCot = cftcService.fetchRussell2000InstitutionalData();
+            finalRussellMetrics.addAll(scoringEngine.applyScores(russellCot));
+
+            // Add real Russell 2000 Technicals
+            TechnicalService.AssetTechnicalData russellTech = technicalService.fetchRussell2000Technicals();
+            int russellTechScore = scoringEngine.scoreTechnicals(russellTech.currentPrice(), russellTech.sma200(), russellTech.rsi14());
+            finalRussellMetrics.add(new MarketMetric("Technical Momentum", russellTech.currentPrice(), 0.0, russellTechScore, MetricCategory.TECHNICALS));
+
+            // Calculate category totals and composite buckets
+            Map<String, Integer> russellCategoryScores = calculateCategoryTotals(finalRussellMetrics);
+
+            int macroHealth = russellCategoryScores.getOrDefault("ECONOMIC_GROWTH", 0)
+                    + russellCategoryScores.getOrDefault("JOB_MARKET", 0)
+                    + russellCategoryScores.getOrDefault("INFLATION", 0);
+
+            int positioningAndFlows = russellCategoryScores.getOrDefault("INSTITUTIONAL_ACTIVITY", 0)
+                    + russellCategoryScores.getOrDefault("CAPITAL_FLOWS", 0);
+
+            int technicalMomentum = russellCategoryScores.getOrDefault("TECHNICALS", 0);
+
+            int finalScore = macroHealth + positioningAndFlows + technicalMomentum;
+            String bias = scoringEngine.getOverallBiasLabel(finalScore);
+
+            this.latestRussell2000Summary = new GoldSummaryResponse(
+                    finalScore,
+                    bias,
+                    macroHealth,
+                    positioningAndFlows,
+                    technicalMomentum,
+                    russellCategoryScores,
+                    finalRussellMetrics
+            );
+
+            System.out.println("Russell 2000 Pipeline completed successfully: " + finalScore + " (" + bias + ")");
+        } catch (Exception e) {
+            System.err.println("Failed to update Russell 2000 pipeline: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
      * Shared helper to route USD fundamentals for US Equities:
      * Growth & Jobs stay direct (+1 stays +1); Inflation & Yields invert (+1 becomes -1).
      */
@@ -364,6 +480,16 @@ public class DashboardStateService {
         if (latestDowSummary != null) {
             historicalScoreRepository.save(new HistoricalScoreEntity("US30", latestDowSummary.totalScore(), latestDowSummary.biasLabel()));
             System.out.println("US30 EOD Snapshot saved successfully: " + latestDowSummary.totalScore() + " (" + latestDowSummary.biasLabel() + ")");
+        }
+
+        if (latestSp500Summary != null) {
+            historicalScoreRepository.save(new HistoricalScoreEntity("SPX", latestSp500Summary.totalScore(), latestSp500Summary.biasLabel()));
+            System.out.println("S&P 500 EOD Snapshot saved successfully: " + latestSp500Summary.totalScore() + " (" + latestSp500Summary.biasLabel() + ")");
+        }
+
+        if (latestRussell2000Summary != null) {
+            historicalScoreRepository.save(new HistoricalScoreEntity("RUT", latestRussell2000Summary.totalScore(), latestRussell2000Summary.biasLabel()));
+            System.out.println("Russell 2000 EOD Snapshot saved successfully: " + latestRussell2000Summary.totalScore() + " (" + latestRussell2000Summary.biasLabel() + ")");
         }
     }
 }

@@ -68,6 +68,22 @@ public class CftcService {
     }
 
     /**
+     * Fetches COT positioning for E-Mini S&P 500 Futures (13874A).
+     * Uses standard metric names so CompositeScoringEngine.applyScores() works seamlessly.
+     */
+    public List<MarketMetric> fetchSp500InstitutionalData() throws Exception {
+        return fetchCotMetrics("13874A");
+    }
+
+    /**
+     * Fetches COT positioning for E-Mini Russell 2000 Futures (239742).
+     * Uses standard metric names so CompositeScoringEngine.applyScores() works seamlessly.
+     */
+    public List<MarketMetric> fetchRussell2000InstitutionalData() throws Exception {
+        return fetchCotMetrics("239742");
+    }
+
+    /**
      * Reusable COT fetcher. Leaves scoring to CompositeScoringEngine.
      */
     private List<MarketMetric> fetchCotMetrics(String contractCode) throws Exception {

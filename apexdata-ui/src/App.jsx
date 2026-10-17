@@ -9,6 +9,8 @@ function App() {
   const [silverSummary, setSilverSummary] = useState(null)
   const [nasdaqSummary, setNasdaqSummary] = useState(null)
   const [dowSummary, setDowSummary] = useState(null)
+  const [sp500Summary, setSp500Summary] = useState(null)
+  const [russell2000Summary, setRussell2000Summary] = useState(null)
   const [loading, setLoading] = useState(true)
 
   // State to manage the dropdown selection
@@ -41,14 +43,24 @@ function App() {
       fetch(`${baseUrl}/api/dashboard/dow`).then(res => {
         if (!res.ok) return null;
         return res.json();
+      }).catch(() => null),
+      fetch(`${baseUrl}/api/dashboard/sp500`).then(res => {
+        if (!res.ok) return null;
+        return res.json();
+      }).catch(() => null),
+      fetch(`${baseUrl}/api/dashboard/russell2000`).then(res => {
+        if (!res.ok) return null;
+        return res.json();
       }).catch(() => null)
     ])
-      .then(([summaryData, historyData, goldData, silverData, nasdaqData, dowData]) => {
+      .then(([summaryData, historyData, goldData, silverData, nasdaqData, dowData, sp500Data, russellData]) => {
         setSummary(summaryData);
         setGoldSummary(goldData);
         setSilverSummary(silverData);
         setNasdaqSummary(nasdaqData);
         setDowSummary(dowData);
+        setSp500Summary(sp500Data);
+        setRussell2000Summary(russellData);
 
         if (Array.isArray(historyData)) {
           const formattedHistory = historyData.map(item => ({
@@ -123,6 +135,8 @@ function App() {
   if (activeAsset === 'XAGUSD') activeSummaryData = silverSummary;
   if (activeAsset === 'NAS100') activeSummaryData = nasdaqSummary;
   if (activeAsset === 'US30') activeSummaryData = dowSummary;
+  if (activeAsset === 'SPX') activeSummaryData = sp500Summary;
+  if (activeAsset === 'RUT') activeSummaryData = russell2000Summary;
 
   const activeScore = activeSummaryData?.totalScore ?? 0;
   const activeBias = activeSummaryData?.biasLabel || activeSummaryData?.overallBias || 'NEUTRAL';
@@ -153,6 +167,18 @@ function App() {
       { name: 'Positioning & Flows', score: dowSummary.cotScore ?? dowSummary.positioningAndFlows ?? 0 },
       { name: 'Technical Momentum', score: dowSummary.technicalScore ?? dowSummary.technicalMomentum ?? 0 }
     ];
+  } else if (activeAsset === 'SPX' && sp500Summary) {
+    activePillars = [
+      { name: 'Economic Health', score: sp500Summary.invertedMacroBaseline ?? sp500Summary.macroHealth ?? 0 },
+      { name: 'Positioning & Flows', score: sp500Summary.cotScore ?? sp500Summary.positioningAndFlows ?? 0 },
+      { name: 'Technical Momentum', score: sp500Summary.technicalScore ?? sp500Summary.technicalMomentum ?? 0 }
+    ];
+  } else if (activeAsset === 'RUT' && russell2000Summary) {
+    activePillars = [
+      { name: 'Economic Health', score: russell2000Summary.invertedMacroBaseline ?? russell2000Summary.macroHealth ?? 0 },
+      { name: 'Positioning & Flows', score: russell2000Summary.cotScore ?? russell2000Summary.positioningAndFlows ?? 0 },
+      { name: 'Technical Momentum', score: russell2000Summary.technicalScore ?? russell2000Summary.technicalMomentum ?? 0 }
+    ];
   } else if (summary) {
     // Default USD layout
     activePillars = [
@@ -173,6 +199,8 @@ function App() {
                      activeAsset === 'XAGUSD' ? 'SILVER MACRO TREND' :
                      activeAsset === 'NAS100' ? 'NASDAQ 100 MACRO TREND' :
                      activeAsset === 'US30' ? 'US30 MACRO TREND' :
+                     activeAsset === 'SPX' ? 'S&P 500 MACRO TREND' :
+                     activeAsset === 'RUT' ? 'RUSSELL 2000 MACRO TREND' :
                      'USD MACRO TREND';
 
   return (
@@ -195,6 +223,8 @@ function App() {
               {silverSummary && <option value="XAGUSD" style={{ backgroundColor: '#111111' }}>SILVER (XAGUSD)</option>}
               {nasdaqSummary && <option value="NAS100" style={{ backgroundColor: '#111111' }}>NASDAQ 100</option>}
               {dowSummary && <option value="US30" style={{ backgroundColor: '#111111' }}>US30 (DOW)</option>}
+              {sp500Summary && <option value="SPX" style={{ backgroundColor: '#111111' }}>S&P 500 (SPX)</option>}
+              {russell2000Summary && <option value="RUT" style={{ backgroundColor: '#111111' }}>RUSSELL 2000 (RUT)</option>}
             </select>
 
             <span style={{ fontSize: '2.5rem', fontWeight: '900', color: getCompositeScoreColor(activeScore) }}>

@@ -173,6 +173,8 @@ public class EngineScheduler {
         stateService.updateSilverPipeline(this.cftcService, this.technicalService, this.engine);
         stateService.updateNasdaqPipeline(this.cftcService, this.technicalService, this.engine);
         stateService.updateDowPipeline(this.cftcService, this.technicalService, this.engine);
+        stateService.updateSp500Pipeline(this.cftcService, this.technicalService, this.engine);
+        stateService.updateRussell2000Pipeline(this.cftcService, this.technicalService, this.engine);
 
         System.out.printf("[SYSTEM] Dashboard State Rebuilt. USD Score (%+d / %s).\n", totalScore, overallBias);
     }

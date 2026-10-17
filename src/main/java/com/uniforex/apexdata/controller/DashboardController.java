@@ -39,24 +39,6 @@ public class DashboardController {
         }
     }
 
-//    @GetMapping("/gold")
-//    public ResponseEntity<?> getGoldSummary() {
-//        try {
-//            // Calls the new orchestration method we will build in DashboardStateService
-//            Object goldSummary = stateService.getLatestGoldSummary();
-//            if (goldSummary == null) {
-//                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-//                        .body("Gold engine has not completed first cycle yet.");
-//            }
-//            return ResponseEntity.ok(goldSummary);
-//        } catch (Exception e) {
-//            System.err.println("[CRITICAL ERROR] Failed to fetch Gold summary:");
-//            e.printStackTrace();
-//            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-//                    .body("Error: " + e.getMessage());
-//        }
-//    }
-
     @GetMapping("/gold")
     public ResponseEntity<?> getGoldSummary() {
         try {
@@ -119,6 +101,40 @@ public class DashboardController {
             return ResponseEntity.ok(silverSummary);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/sp500")
+    public ResponseEntity<?> getSp500Summary() {
+        try {
+            GoldSummaryResponse sp500Summary = stateService.getLatestSp500Summary();
+            if (sp500Summary == null) {
+                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                        .body("S&P 500 engine has not completed first cycle yet.");
+            }
+            return ResponseEntity.ok(sp500Summary);
+        } catch (Exception e) {
+            System.err.println("[CRITICAL ERROR] Failed to fetch S&P 500 summary:");
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/russell2000")
+    public ResponseEntity<?> getRussell2000Summary() {
+        try {
+            GoldSummaryResponse russellSummary = stateService.getLatestRussell2000Summary();
+            if (russellSummary == null) {
+                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                        .body("Russell 2000 engine has not completed first cycle yet.");
+            }
+            return ResponseEntity.ok(russellSummary);
+        } catch (Exception e) {
+            System.err.println("[CRITICAL ERROR] Failed to fetch Russell 2000 summary:");
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error: " + e.getMessage());
         }
     }
 
