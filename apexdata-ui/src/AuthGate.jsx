@@ -4,7 +4,8 @@ import { useUser, SignOutButton } from "@clerk/react";
 const WHITELIST_EMAILS = [
   "nqobilenkiwane01@gmail.com",
   "sibongumusasimelane4@gmail.com",
-  "mabasasiyabonga43@gmail.com"
+  "mabasasiyabonga43@gmail.com",
+  "apexdata.review@gmail.com"
 ];
 
 function AuthGate({ children }) {
