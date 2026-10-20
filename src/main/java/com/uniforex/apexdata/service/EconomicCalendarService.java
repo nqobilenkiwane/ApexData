@@ -77,7 +77,7 @@ public class EconomicCalendarService {
                 continue;
             }
 
-            // CRITICAL UPDATE: Investing.com stores the metric name in "event", not "title"
+            // CRITICAL UPDATE: Investing.com stores the metric name in "event", not "title".
             String title = node.path("event").asText("").toLowerCase().trim();
             String actualText = cleanString(node.path("actual").asText(""));
             String forecastText = cleanString(node.path("forecast").asText(""));
