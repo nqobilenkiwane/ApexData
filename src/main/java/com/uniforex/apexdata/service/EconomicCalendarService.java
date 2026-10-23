@@ -107,18 +107,18 @@ public class EconomicCalendarService {
                 uniqueMetrics.put("Core PCE (MoM)", new MarketMetric("Core PCE (MoM)", actual, estimate, 0, MetricCategory.INFLATION));
             } else if (title.contains("industrial production")) {
                 uniqueMetrics.put("Industrial Production", new MarketMetric("Industrial Production", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
-            } else if (title.contains("consumer sentiment") || title.contains("uom consumer sentiment")) {
-                uniqueMetrics.put("Consumer Sentiment", new MarketMetric("Consumer Sentiment", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
-            } else if (title.contains("ism manufacturing pmi") || title.contains("manufacturing pmi")) {
-                uniqueMetrics.put("Manufacturing PMI", new MarketMetric("Manufacturing PMI", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
-            } else if (title.contains("ism services pmi") || title.contains("services pmi")) {
-                uniqueMetrics.put("Services PMI", new MarketMetric("Services PMI", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
+            } else if (title.contains("uom consumer sentiment") && title.contains("prelim")) {
+                uniqueMetrics.put("Prelim UoM Consumer Sentiment", new MarketMetric("Prelim UoM Consumer Sentiment", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
+            } else if (title.contains("ism manufacturing pmi")) {
+                uniqueMetrics.put("ISM Manufacturing PMI", new MarketMetric("ISM Manufacturing PMI", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
+            } else if (title.contains("ism services pmi")) {
+                uniqueMetrics.put("ISM Services PMI", new MarketMetric("ISM Services PMI", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
             } else if (title.contains("jolts")) {
                 uniqueMetrics.put("JOLTS Job Openings", new MarketMetric("JOLTS Job Openings", actual, estimate, 0, MetricCategory.JOB_MARKET));
             } else if (title.contains("cpi") && !title.contains("core") && (title.contains("y/y") || title.contains("annual"))) {
-                uniqueMetrics.put("YoY Inflation", new MarketMetric("YoY Inflation", actual, estimate, 0, MetricCategory.INFLATION));
-            } else if (title.contains("gdp") && (title.contains("advance") || title.contains("final") || title.contains("preliminary") || title.contains("q/q"))) {
-                uniqueMetrics.put("Real GDP", new MarketMetric("Real GDP", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
+                uniqueMetrics.put("CPI (YoY)", new MarketMetric("CPI (YoY)", actual, estimate, 0, MetricCategory.INFLATION));
+            } else if (title.contains("final gdp q/q")) {
+                uniqueMetrics.put("Final GDP (QoQ)", new MarketMetric("Final GDP (QoQ)", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
             }
         }
 
