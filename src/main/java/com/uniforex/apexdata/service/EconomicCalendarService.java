@@ -89,6 +89,7 @@ public class EconomicCalendarService {
             double actual = parseValue(actualText);
             double estimate = (forecastText.isEmpty() || forecastText.equals("-") || forecastText.equals("null")) ? actual : parseValue(forecastText);
 
+            //Edited the metric names to cater to new metrics we measure.
             if (title.contains("adp") && title.contains("employment")) {
                 uniqueMetrics.put("ADP Private Employment", new MarketMetric("ADP Private Employment", actual, estimate, 0, MetricCategory.JOB_MARKET));
             } else if ((title.contains("non-farm") || title.contains("nonfarm")) && !title.contains("payroll")) {
