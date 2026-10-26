@@ -188,8 +188,14 @@ function App() {
     ];
   }
 
-  // Filter history based on active asset.
+  // Filter history based on active asset and 60-day window
+  const sixtyDaysAgo = new Date();
+  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+
   const activeHistory = history.filter(item => {
+    const itemDate = new Date(item.timestamp);
+    if (itemDate < sixtyDaysAgo) return false;
+
     if (activeAsset === 'DXY') return item.currency === 'USD' || !item.currency;
     return item.currency === activeAsset;
   });
@@ -262,7 +268,7 @@ function App() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={activeHistory} margin={{ top: 10, right: 10, left: -20, bottom: 0 }} barCategoryGap="10%">
                 <CartesianGrid strokeDasharray="3 3" stroke="#222222" vertical={false} />
-                <XAxis dataKey="displayDate" stroke="#888888" tick={{ fill: '#888888', fontSize: 12 }} tickMargin={10} />
+                <XAxis dataKey="displayDate" stroke="#888888" tick={{ fill: '#888888', fontSize: 12 }} tickMargin={10} interval={6} />
                 <YAxis stroke="#888888" tick={{ fill: '#888888', fontSize: 12 }} domain={[-22, 22]} />
                 <Tooltip content={<CustomTooltip />} cursor={{fill: '#1a1a1a'}} />
                 <ReferenceArea y1={10} y2={22} fill="#00ff88" fillOpacity={0.15} />
