@@ -192,13 +192,21 @@ function App() {
   const sixtyDaysAgo = new Date();
   sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
 
-  const activeHistory = history.filter(item => {
+  const rawFilteredHistory = history.filter(item => {
     const itemDate = new Date(item.timestamp);
     if (itemDate < sixtyDaysAgo) return false;
 
     if (activeAsset === 'DXY') return item.currency === 'USD' || !item.currency;
     return item.currency === activeAsset;
   });
+
+  // Deduplicate intraday snapshots to render exactly one bar per day
+  const dailyMap = new Map();
+  rawFilteredHistory.forEach(item => {
+    dailyMap.set(item.displayDate, item);
+  });
+
+  const activeHistory = Array.from(dailyMap.values());
 
   // Dynamic chart title.
   const chartTitle = activeAsset === 'XAUUSD' ? 'GOLD MACRO TREND' :
