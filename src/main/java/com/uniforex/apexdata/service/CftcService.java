@@ -12,6 +12,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 @Service
@@ -27,128 +28,113 @@ public class CftcService {
         this.httpClient = HttpClient.newHttpClient();
     }
 
-    /**
-     * Fetches COT positioning for USD Index (098662).
-     */
-    public List<MarketMetric> fetchInstitutionalData() throws Exception {
+    public List<MarketMetric> fetchInstitutionalData() {
         return fetchCotMetrics("098662");
     }
 
-    /**
-     * Fetches COT positioning for COMEX Gold Futures (088691) as MarketMetrics.
-     * Uses standard metric names so CompositeScoringEngine.applyScores() works seamlessly.
-     */
-    public List<MarketMetric> fetchGoldInstitutionalData() throws Exception {
+    public List<MarketMetric> fetchGoldInstitutionalData() {
         return fetchCotMetrics("088691");
     }
 
-    /**
-     * Fetches COT positioning for E-Mini Nasdaq 100 Futures (20974+).
-     * Uses standard metric names so CompositeScoringEngine.applyScores() works seamlessly.
-     */
-    public List<MarketMetric> fetchNasdaqInstitutionalData() throws Exception {
-        // The '+' sign must be URL-encoded as '%2B' so the Socrata API doesn't read it as a space.
+    public List<MarketMetric> fetchNasdaqInstitutionalData() {
         return fetchCotMetrics("20974%2B");
     }
 
-    /**
-     * Fetches COT positioning for E-Mini Dow Jones Futures (12460+).
-     * Uses standard metric names so CompositeScoringEngine.applyScores() works seamlessly.
-     */
-    public List<MarketMetric> fetchDowInstitutionalData() throws Exception {
+    public List<MarketMetric> fetchDowInstitutionalData() {
         return fetchCotMetrics("12460%2B");
     }
 
-    /**
-     * Fetches COT positioning for COMEX Silver Futures (084691).
-     * Uses standard metric names so CompositeScoringEngine.applyScores() works seamlessly.
-     */
-    public List<MarketMetric> fetchSilverInstitutionalData() throws Exception {
+    public List<MarketMetric> fetchSilverInstitutionalData() {
         return fetchCotMetrics("084691");
     }
 
-    /**
-     * Fetches COT positioning for E-Mini S&P 500 Futures (13874A).
-     * Uses standard metric names so CompositeScoringEngine.applyScores() works seamlessly.
-     */
-    public List<MarketMetric> fetchSp500InstitutionalData() throws Exception {
+    public List<MarketMetric> fetchSp500InstitutionalData() {
         return fetchCotMetrics("13874A");
     }
 
-    /**
-     * Fetches COT positioning for E-Mini Russell 2000 Futures (239742).
-     * Uses standard metric names so CompositeScoringEngine.applyScores() works seamlessly.
-     */
-    public List<MarketMetric> fetchRussell2000InstitutionalData() throws Exception {
+    public List<MarketMetric> fetchRussell2000InstitutionalData() {
         return fetchCotMetrics("239742");
     }
 
-    /**
-     * Reusable COT fetcher. Leaves scoring to CompositeScoringEngine.
-     */
-    private List<MarketMetric> fetchCotMetrics(String contractCode) throws Exception {
-        String url = "https://publicreporting.cftc.gov/resource/6dca-aqww.json?cftc_contract_market_code="
-                + contractCode + "&$order=report_date_as_yyyy_mm_dd%20DESC&$limit=2";
+    private List<MarketMetric> fetchCotMetrics(String contractCode) {
+        try {
+            String url = "https://publicreporting.cftc.gov/resource/6dca-aqww.json?cftc_contract_market_code="
+                    + contractCode + "&$order=report_date_as_yyyy_mm_dd%20DESC&$limit=2";
 
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .GET()
-                .build();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .GET()
+                    .build();
 
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        JsonNode root = mapper.readTree(response.body());
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            JsonNode root = mapper.readTree(response.body());
 
-        if (root.isEmpty() || root.size() < 2) {
-            throw new RuntimeException("Insufficient CFTC data returned for code " + contractCode);
+            // Null check and ensure it is a valid array returned from the CFTC API
+            if (root == null || !root.isArray() || root.size() < 2) {
+                System.err.println("[WARNING] fetchCotMetrics: Invalid or insufficient data returned for code " + contractCode + ". Returning empty list to prevent pipeline crash.");
+                return Collections.emptyList();
+            }
+
+            JsonNode currentWeek = root.get(0);
+            if (currentWeek == null || !currentWeek.has("noncomm_positions_long_all")) {
+                System.err.println("[WARNING] fetchCotMetrics: Missing expected fields for code " + contractCode);
+                return Collections.emptyList();
+            }
+
+            double currentLong = currentWeek.get("noncomm_positions_long_all").asDouble();
+            double currentShort = currentWeek.get("noncomm_positions_short_all").asDouble();
+            double currentNet = currentLong - currentShort;
+            double currentLongPercentage = (currentLong / (currentLong + currentShort)) * 100.0;
+
+            JsonNode previousWeek = root.get(1);
+            double prevLong = previousWeek.get("noncomm_positions_long_all").asDouble();
+            double prevShort = previousWeek.get("noncomm_positions_short_all").asDouble();
+            double previousNet = prevLong - prevShort;
+
+            return Arrays.asList(
+                    new MarketMetric("COT Net Positioning", currentNet, 0.0, 0, MetricCategory.INSTITUTIONAL_ACTIVITY),
+                    new MarketMetric("COT WoW Delta", currentNet, previousNet, 0, MetricCategory.INSTITUTIONAL_ACTIVITY),
+                    new MarketMetric("COT Long Percentage", currentLongPercentage, 0.0, 0, MetricCategory.INSTITUTIONAL_ACTIVITY)
+            );
+
+        } catch (Exception e) {
+            System.err.println("[ERROR] fetchCotMetrics failed for code " + contractCode + ": " + e.getMessage());
+            return Collections.emptyList();
         }
-
-        JsonNode currentWeek = root.get(0);
-        double currentLong = currentWeek.get("noncomm_positions_long_all").asDouble();
-        double currentShort = currentWeek.get("noncomm_positions_short_all").asDouble();
-
-        double currentNet = currentLong - currentShort;
-        double currentLongPercentage = (currentLong / (currentLong + currentShort)) * 100.0;
-
-        JsonNode previousWeek = root.get(1);
-        double prevLong = previousWeek.get("noncomm_positions_long_all").asDouble();
-        double prevShort = previousWeek.get("noncomm_positions_short_all").asDouble();
-        double previousNet = prevLong - prevShort;
-
-        return Arrays.asList(
-                new MarketMetric("COT Net Positioning", currentNet, 0.0, 0, MetricCategory.INSTITUTIONAL_ACTIVITY),
-                new MarketMetric("COT WoW Delta", currentNet, previousNet, 0, MetricCategory.INSTITUTIONAL_ACTIVITY),
-                new MarketMetric("COT Long Percentage", currentLongPercentage, 0.0, 0, MetricCategory.INSTITUTIONAL_ACTIVITY)
-        );
     }
 
-    /**
-     * Preserved for CompositeScoringEngine.scoreGoldCot(...) in the top scorecard banner.
-     */
-    public GoldCotData fetchGoldCotData() throws Exception {
-        String url = "https://publicreporting.cftc.gov/resource/6dca-aqww.json?cftc_contract_market_code=088691&$order=report_date_as_yyyy_mm_dd%20DESC&$limit=2";
+    public GoldCotData fetchGoldCotData() {
+        try {
+            String url = "https://publicreporting.cftc.gov/resource/6dca-aqww.json?cftc_contract_market_code=088691&$order=report_date_as_yyyy_mm_dd%20DESC&$limit=2";
 
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .GET()
-                .build();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .GET()
+                    .build();
 
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        JsonNode root = mapper.readTree(response.body());
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            JsonNode root = mapper.readTree(response.body());
 
-        if (root.isEmpty() || root.size() < 2) {
-            throw new RuntimeException("Insufficient CFTC data returned for Gold from Socrata API");
+            if (root == null || !root.isArray() || root.size() < 2) {
+                System.err.println("[WARNING] fetchGoldCotData: Invalid CFTC data returned from Socrata API. Returning zero-value fallback data.");
+                return new GoldCotData(0, 0, 0);
+            }
+
+            JsonNode currentWeek = root.get(0);
+            long currentLong = currentWeek.get("noncomm_positions_long_all").asLong();
+            long currentShort = currentWeek.get("noncomm_positions_short_all").asLong();
+
+            JsonNode previousWeek = root.get(1);
+            long prevLong = previousWeek.get("noncomm_positions_long_all").asLong();
+            long prevShort = previousWeek.get("noncomm_positions_short_all").asLong();
+            long previousNet = prevLong - prevShort;
+
+            return new GoldCotData(currentLong, currentShort, previousNet);
+
+        } catch (Exception e) {
+            System.err.println("[ERROR] fetchGoldCotData failed: " + e.getMessage());
+            return new GoldCotData(0, 0, 0);
         }
-
-        JsonNode currentWeek = root.get(0);
-        long currentLong = currentWeek.get("noncomm_positions_long_all").asLong();
-        long currentShort = currentWeek.get("noncomm_positions_short_all").asLong();
-
-        JsonNode previousWeek = root.get(1);
-        long prevLong = previousWeek.get("noncomm_positions_long_all").asLong();
-        long prevShort = previousWeek.get("noncomm_positions_short_all").asLong();
-        long previousNet = prevLong - prevShort;
-
-        return new GoldCotData(currentLong, currentShort, previousNet);
     }
 
     public record GoldCotData(long nonCommercialLongs, long nonCommercialShorts, long previousNetPosition) {}
