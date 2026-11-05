@@ -112,7 +112,7 @@ public class EconomicCalendarService {
                 uniqueMetrics.put("Prelim UoM Consumer Sentiment", new MarketMetric("Prelim UoM Consumer Sentiment", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
             } else if (title.contains("ism manufacturing pmi")) {
                 uniqueMetrics.put("ISM Manufacturing PMI", new MarketMetric("ISM Manufacturing PMI", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
-            } else if (title.contains("ism services pmi")) {
+            } else if (title.contains("ism services pmi") || title.contains("ism non-manufacturing pmi")) {
                 uniqueMetrics.put("ISM Services PMI", new MarketMetric("ISM Services PMI", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
             } else if (title.contains("jolts")) {
                 uniqueMetrics.put("JOLTS Job Openings", new MarketMetric("JOLTS Job Openings", actual, estimate, 0, MetricCategory.JOB_MARKET));
