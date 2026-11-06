@@ -92,7 +92,7 @@ public class EconomicCalendarService {
             //Edited the metric names to cater to new metrics we measure.
             if (title.contains("adp") && title.contains("employment")) {
                 uniqueMetrics.put("ADP Private Employment", new MarketMetric("ADP Private Employment", actual, estimate, 0, MetricCategory.JOB_MARKET));
-            } else if ((title.contains("non-farm") || title.contains("nonfarm")) && !title.contains("payroll")) {
+            } else if ((title.contains("nonfarm payrolls") || title.contains("non-farm employment change")) && !title.contains("private")) {
                 uniqueMetrics.put("NFP (Jobs)", new MarketMetric("NFP (Jobs)", actual, estimate, 0, MetricCategory.JOB_MARKET));
             } else if (title.contains("unemployment rate")) {
                 uniqueMetrics.put("Unemployment Rate", new MarketMetric("Unemployment Rate", actual, estimate, 0, MetricCategory.JOB_MARKET));
