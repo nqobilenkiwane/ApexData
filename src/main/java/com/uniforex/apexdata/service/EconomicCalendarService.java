@@ -127,6 +127,7 @@ public class EconomicCalendarService {
         return new ArrayList<>(uniqueMetrics.values());
     }
 
+    // This is meant to clean up the strings
     private String cleanString(String input) {
         if (input == null) return "";
         return input.replace('\u00A0', ' ')
