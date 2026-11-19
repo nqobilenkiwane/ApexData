@@ -48,7 +48,7 @@ public class EconomicCalendarService {
         String jsonInputBody = "{\n" +
                 "  \"country\": \"united states\",\n" +
                 "  \"fromDate\": \"" + fromDate + "\",\n" +
-                "  \"importances\": \"high,medium\",\n" +
+                "  \"importances\": \"\",\n" +
                 "  \"timeFilter\": \"time_only\",\n" +
                 "  \"toDate\": \"" + toDate + "\"\n" +
                 "}";
