@@ -47,4 +47,5 @@ public class CalendarEventEntity {
     public Double getActualValue() { return actualValue; }
     public Double getEstimateValue() { return estimateValue; }
     public MetricCategory getCategory() { return category; }
+    public LocalDateTime getLastUpdated() { return lastUpdated; }
 }

@@ -22,8 +22,12 @@ public class CompositeScoringEngine {
         for (MarketMetric m : rawMetrics) {
             int score = 0;
 
-            if (m.forecastValue() != 0.0) {
-                // PRIORITY: Score surprise factor if an estimate/forecast exists
+            boolean isCalendarMetric = m.category() == MetricCategory.ECONOMIC_GROWTH
+                    || m.category() == MetricCategory.JOB_MARKET
+                    || m.category() == MetricCategory.INFLATION;
+
+            if (isCalendarMetric || m.forecastValue() != 0.0) {
+                // PRIORITY: Score surprise factor even if an estimate/forecast is 0.0
                 score = scoreSurprise(m);
             } else {
                 // FALLBACK: Absolute threshold scoring for metrics without estimates
@@ -67,7 +71,7 @@ public class CompositeScoringEngine {
                         score = 0;
                 }
             }
-            scoredMetrics.add(new MarketMetric(m.name(), m.actualValue(), m.forecastValue(), score, m.category()));
+            scoredMetrics.add(new MarketMetric(m.name(), m.actualValue(), m.forecastValue(), score, m.category(), m.lastUpdated()));
         }
         return scoredMetrics;
     }

@@ -6,8 +6,10 @@ import com.uniforex.apexdata.model.MetricCategory;
 import com.uniforex.apexdata.model.dto.DashboardSummaryResponse;
 import com.uniforex.apexdata.model.entity.CalendarEventEntity;
 import com.uniforex.apexdata.model.entity.HistoricalScoreEntity;
+import com.uniforex.apexdata.model.entity.MetricShiftEntity;
 import com.uniforex.apexdata.repository.CalendarEventRepository;
 import com.uniforex.apexdata.repository.HistoricalScoreRepository;
+import com.uniforex.apexdata.repository.MetricShiftRepository;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -24,6 +26,7 @@ public class EngineScheduler {
 
     private final CalendarEventRepository calendarRepo;
     private final HistoricalScoreRepository historyRepo;
+    private final MetricShiftRepository shiftRepo;
     private final DashboardStateService stateService;
 
     private final CftcService cftcService;
@@ -40,6 +43,7 @@ public class EngineScheduler {
     public EngineScheduler(
             CalendarEventRepository calendarRepo,
             HistoricalScoreRepository historyRepo,
+            MetricShiftRepository shiftRepo,
             DashboardStateService stateService,
             CftcService cftcService,
             TechnicalService technicalService,
@@ -49,6 +53,7 @@ public class EngineScheduler {
 
         this.calendarRepo = calendarRepo;
         this.historyRepo = historyRepo;
+        this.shiftRepo = shiftRepo;
         this.stateService = stateService;
         this.cftcService = cftcService;
         this.technicalService = technicalService;
@@ -61,7 +66,6 @@ public class EngineScheduler {
     public void primeStateOnStartup() {
         System.out.println("\n[SYSTEM] Application Started. Priming dashboard state from database...");
         try {
-            // Initial one-time fetch to populate static caches
             refreshMacroData();
             rebuildAndScoreState(false);
         } catch (Exception e) {
@@ -72,16 +76,61 @@ public class EngineScheduler {
     // Runs once every day at 9:30 PM SAST, catching all US morning data + FOMC
     @Scheduled(cron = "0 30 21 * * ?", zone = "Africa/Johannesburg")
     public void executeCalendarCycle() {
-        System.out.println("\n[SYSTEM] Executing 15-Minute Calendar Poll...");
+        System.out.println("\n[SYSTEM] Executing Daily Calendar Poll...");
         try {
             List<MarketMetric> liveCalendarEvents = calendarService.fetchLiveCalendarEvents();
             System.out.println("[DEBUG] Calendar Events Found: " + liveCalendarEvents.size());
 
             if (!liveCalendarEvents.isEmpty()) {
-                List<CalendarEventEntity> entities = liveCalendarEvents.stream()
-                        .map(e -> new CalendarEventEntity(e.name(), e.actualValue(), e.forecastValue(), e.category()))
-                        .toList();
-                calendarRepo.saveAll(entities);
+                Map<String, CalendarEventEntity> existingMap = calendarRepo.findAll().stream()
+                        .collect(Collectors.toMap(
+                                CalendarEventEntity::getMetricName,
+                                e -> e,
+                                (existing, replacement) -> replacement
+                        ));
+
+                List<CalendarEventEntity> eventsToSave = new ArrayList<>();
+                List<MetricShiftEntity> shiftsToSave = new ArrayList<>();
+
+                for (MarketMetric incoming : liveCalendarEvents) {
+                    CalendarEventEntity existing = existingMap.get(incoming.name());
+
+                    if (existing == null) {
+                        // Brand new metric
+                        eventsToSave.add(new CalendarEventEntity(
+                                incoming.name(), incoming.actualValue(), incoming.forecastValue(), incoming.category()
+                        ));
+                    } else {
+                        boolean actualChanged = Double.compare(existing.getActualValue(), incoming.actualValue()) != 0;
+                        boolean estimateChanged = Double.compare(existing.getEstimateValue(), incoming.forecastValue()) != 0;
+
+                        if (actualChanged) {
+                            shiftsToSave.add(new MetricShiftEntity(
+                                    incoming.name(),
+                                    incoming.category().name(),
+                                    existing.getActualValue(),
+                                    incoming.actualValue(),
+                                    incoming.forecastValue()
+                            ));
+                        }
+
+                        // Only overwrite in DB if a value actually changed, preserving accurate last_updated dates
+                        if (actualChanged || estimateChanged) {
+                            eventsToSave.add(new CalendarEventEntity(
+                                    incoming.name(), incoming.actualValue(), incoming.forecastValue(), incoming.category()
+                            ));
+                        }
+                    }
+                }
+
+                if (!eventsToSave.isEmpty()) {
+                    calendarRepo.saveAll(eventsToSave);
+                    System.out.println("[SYSTEM] Updated " + eventsToSave.size() + " calendar metrics.");
+                }
+                if (!shiftsToSave.isEmpty()) {
+                    shiftRepo.saveAll(shiftsToSave);
+                    System.out.println("[SYSTEM] Logged " + shiftsToSave.size() + " new macro shifts.");
+                }
             }
 
             rebuildAndScoreState(false);
@@ -96,7 +145,6 @@ public class EngineScheduler {
     public void executeMacroCycle() {
         System.out.println("\n[SYSTEM] Executing Macro, Yields & Technical Cycle...");
         refreshMacroData();
-        // Record snapshot to history ledger at daily/macro boundaries
         rebuildAndScoreState(true);
     }
 
@@ -121,11 +169,18 @@ public class EngineScheduler {
     }
 
     private synchronized void rebuildAndScoreState(boolean recordHistoricalSnapshot) {
-        // 1. Load historical calendar state safely (resolving duplicate key collisions)
+        // 1. Load historical calendar state safely (now preserving lastUpdated!)
         Map<String, MarketMetric> persistedState = calendarRepo.findAll().stream()
                 .collect(Collectors.toMap(
                         CalendarEventEntity::getMetricName,
-                        e -> new MarketMetric(e.getMetricName(), e.getActualValue(), e.getEstimateValue(), 0, e.getCategory()),
+                        e -> new MarketMetric(
+                                e.getMetricName(),
+                                e.getActualValue(),
+                                e.getEstimateValue(),
+                                0,
+                                e.getCategory(),
+                                e.getLastUpdated()
+                        ),
                         (existing, replacement) -> replacement
                 ));
 

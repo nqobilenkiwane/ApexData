@@ -3,6 +3,7 @@ package com.uniforex.apexdata.controller;
 import com.uniforex.apexdata.model.dto.DashboardSummaryResponse;
 import com.uniforex.apexdata.model.dto.GoldSummaryResponse;
 import com.uniforex.apexdata.repository.HistoricalScoreRepository;
+import com.uniforex.apexdata.repository.MetricShiftRepository;
 import com.uniforex.apexdata.service.DashboardStateService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,10 +17,12 @@ public class DashboardController {
 
     private final HistoricalScoreRepository historyRepo;
     private final DashboardStateService stateService;
+    private final MetricShiftRepository shiftRepo;
 
-    public DashboardController(HistoricalScoreRepository historyRepo, DashboardStateService stateService) {
+    public DashboardController(HistoricalScoreRepository historyRepo, DashboardStateService stateService, MetricShiftRepository shiftRepo) {
         this.historyRepo = historyRepo;
         this.stateService = stateService;
+        this.shiftRepo = shiftRepo;
     }
 
     @GetMapping("/summary")
@@ -144,6 +147,18 @@ public class DashboardController {
             return ResponseEntity.ok(historyRepo.findAll());
         } catch (Exception e) {
             System.err.println("[CRITICAL ERROR] Failed to fetch history:");
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/shifts")
+    public ResponseEntity<?> getRecentShifts() {
+        try {
+            return ResponseEntity.ok(shiftRepo.findTop20ByOrderByChangedAtDesc());
+        } catch (Exception e) {
+            System.err.println("[CRITICAL ERROR] Failed to fetch recent shifts:");
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error: " + e.getMessage());
