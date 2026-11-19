@@ -48,7 +48,7 @@ public class EconomicCalendarService {
         String jsonInputBody = "{\n" +
                 "  \"country\": \"united states\",\n" +
                 "  \"fromDate\": \"" + fromDate + "\",\n" +
-                "  \"importances\": \"high\",\n" +
+                "  \"importances\": \"high,medium\",\n" +
                 "  \"timeFilter\": \"time_only\",\n" +
                 "  \"toDate\": \"" + toDate + "\"\n" +
                 "}";
@@ -106,8 +106,8 @@ public class EconomicCalendarService {
                 uniqueMetrics.put("Wage Growth (MoM)", new MarketMetric("Wage Growth (MoM)", actual, estimate, 0, MetricCategory.INFLATION));
             } else if (title.contains("core pce price index") && title.contains("m/m")) {
                 uniqueMetrics.put("Core PCE (MoM)", new MarketMetric("Core PCE (MoM)", actual, estimate, 0, MetricCategory.INFLATION));
-            } else if (title.contains("industrial production")) {
-                uniqueMetrics.put("Industrial Production", new MarketMetric("Industrial Production", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
+            } else if (title.contains("industrial production") && (title.contains("(mom") || title.contains("m/m"))) {
+                uniqueMetrics.put("Industrial Production (MoM)", new MarketMetric("Industrial Production (MoM)", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
             } else if (title.contains("uom consumer sentiment") && title.contains("prelim")) {
                 uniqueMetrics.put("Prelim UoM Consumer Sentiment", new MarketMetric("Prelim UoM Consumer Sentiment", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
             } else if (title.contains("ism manufacturing pmi")) {
