@@ -104,7 +104,8 @@ public class EconomicCalendarService {
                 uniqueMetrics.put("PPI (MoM)", new MarketMetric("PPI (MoM)", actual, estimate, 0, MetricCategory.INFLATION));
             } else if (title.contains("average hourly earnings") || (title.contains("wage") && title.contains("m/m"))) {
                 uniqueMetrics.put("Wage Growth (MoM)", new MarketMetric("Wage Growth (MoM)", actual, estimate, 0, MetricCategory.INFLATION));
-            } else if (title.contains("core pce price index") && title.contains("m/m")) {
+                // Core PCE (MoM) — match "(mom)" as well as "m/m"
+            } else if (title.contains("core pce price index") && (title.contains("(mom)") || title.contains("m/m"))) {
                 uniqueMetrics.put("Core PCE (MoM)", new MarketMetric("Core PCE (MoM)", actual, estimate, 0, MetricCategory.INFLATION));
             } else if (title.contains("industrial production") && (title.contains("(mom") || title.contains("m/m"))) {
                 uniqueMetrics.put("Industrial Production (MoM)", new MarketMetric("Industrial Production (MoM)", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
@@ -132,10 +133,15 @@ public class EconomicCalendarService {
                 uniqueMetrics.put("ISM Services PMI", new MarketMetric("ISM Services PMI", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
             } else if (title.contains("jolts")) {
                 uniqueMetrics.put("JOLTS Job Openings", new MarketMetric("JOLTS Job Openings", actual, estimate, 0, MetricCategory.JOB_MARKET));
-            } else if (title.contains("cpi") && !title.contains("core") && (title.contains("y/y") || title.contains("annual"))) {
+                // CPI (YoY) — match "(yoy)" as well as "y/y"
+            } else if (title.contains("cpi") && !title.contains("core") && (title.contains("(yoy)") || title.contains("y/y") || title.contains("annual"))) {
                 uniqueMetrics.put("CPI (YoY)", new MarketMetric("CPI (YoY)", actual, estimate, 0, MetricCategory.INFLATION));
-            } else if (title.contains("final gdp q/q")) {
-                uniqueMetrics.put("Final GDP (QoQ)", new MarketMetric("Final GDP (QoQ)", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
+                // GDP (QoQ) — match "gdp (qoq)" while excluding GDP Price Index / GDPNow
+            } else if ((title.contains("gdp (qoq)") || title.contains("gdp q/q"))
+                    && !title.contains("price index")
+                    && !title.contains("sales")
+                    && !title.contains("gdpnow")) {
+                uniqueMetrics.put("GDP (QoQ)", new MarketMetric("GDP (QoQ)", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
             }
         }
 
