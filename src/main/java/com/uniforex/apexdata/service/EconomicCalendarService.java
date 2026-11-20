@@ -108,8 +108,24 @@ public class EconomicCalendarService {
                 uniqueMetrics.put("Core PCE (MoM)", new MarketMetric("Core PCE (MoM)", actual, estimate, 0, MetricCategory.INFLATION));
             } else if (title.contains("industrial production") && (title.contains("(mom") || title.contains("m/m"))) {
                 uniqueMetrics.put("Industrial Production (MoM)", new MarketMetric("Industrial Production (MoM)", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
-            } else if (title.contains("uom consumer sentiment") && title.contains("prelim")) {
-                uniqueMetrics.put("Prelim UoM Consumer Sentiment", new MarketMetric("Prelim UoM Consumer Sentiment", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
+            } else if ((title.contains("michigan consumer sentiment") || title.contains("uom consumer sentiment")) && !title.contains("final")) {
+
+                // Investing.com strips the 'P' icon, so isolate Prelim by checking if it's in the first half of the month
+                String eventDateStr = node.path("date").asText("");
+                int dayOfMonth = today.getDayOfMonth();
+                try {
+                    if (!eventDateStr.isEmpty()) {
+                        // Handles ISO dates like "2026-11-06" or "2026-11-06T15:00:00Z"
+                        dayOfMonth = LocalDate.parse(eventDateStr.substring(0, 10)).getDayOfMonth();
+                    }
+                } catch (Exception ignored) {
+                    // Falls back to today's day of month
+                }
+
+                if (dayOfMonth <= 16) {
+                    uniqueMetrics.put("Prelim UoM Consumer Sentiment",
+                            new MarketMetric("Prelim UoM Consumer Sentiment", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
+                }
             } else if (title.contains("ism manufacturing pmi")) {
                 uniqueMetrics.put("ISM Manufacturing PMI", new MarketMetric("ISM Manufacturing PMI", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
             } else if (title.contains("ism services pmi") || title.contains("ism non-manufacturing pmi")) {
