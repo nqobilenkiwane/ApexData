@@ -90,17 +90,22 @@ public class EconomicCalendarService {
             double estimate = (forecastText.isEmpty() || forecastText.equals("-") || forecastText.equals("null")) ? actual : parseValue(forecastText);
 
             //Edited the metric names to cater to new metrics we measure.
-            if (title.contains("adp") && title.contains("employment")) {
+
+                // ADP Private Employment — ignore weekly
+            if (title.contains("adp") && title.contains("employment") && !title.contains("weekly")) {
                 uniqueMetrics.put("ADP Private Employment", new MarketMetric("ADP Private Employment", actual, estimate, 0, MetricCategory.JOB_MARKET));
             } else if ((title.contains("nonfarm payrolls") || title.contains("non-farm employment change")) && !title.contains("private")) {
                 uniqueMetrics.put("NFP (Jobs)", new MarketMetric("NFP (Jobs)", actual, estimate, 0, MetricCategory.JOB_MARKET));
             } else if (title.contains("unemployment rate")) {
                 uniqueMetrics.put("Unemployment Rate", new MarketMetric("Unemployment Rate", actual, estimate, 0, MetricCategory.JOB_MARKET));
-            } else if (title.contains("retail sales") && !title.contains("core")) {
+                // Retail Sales (MoM) — ignore Core, Ex Gas/Autos, Control, YoY
+            } else if (title.contains("retail sales") && !title.contains("core") && !title.contains("ex ") && !title.contains("control") && !title.contains("(yoy)")) {
                 uniqueMetrics.put("Retail Sales (MoM)", new MarketMetric("Retail Sales (MoM)", actual, estimate, 0, MetricCategory.ECONOMIC_GROWTH));
-            } else if (title.contains("unemployment claims") || title.contains("jobless claims")) {
+                // Initial Jobless Claims — ignore 4-Week Avg and Continuing
+            } else if ((title.contains("unemployment claims") || title.contains("jobless claims")) && !title.contains("4-week") && !title.contains("continuing")) {
                 uniqueMetrics.put("Initial Jobless Claims", new MarketMetric("Initial Jobless Claims", actual, estimate, 0, MetricCategory.JOB_MARKET));
-            } else if (title.contains("ppi") && !title.contains("core") && (title.contains("m/m") || !title.contains("y/y"))) {
+                // PPI (MoM) — ignore Core and Ex Food/Energy
+            } else if (title.contains("ppi") && !title.contains("core") && !title.contains("ex") && (title.contains("(mom)") || title.contains("m/m"))) {
                 uniqueMetrics.put("PPI (MoM)", new MarketMetric("PPI (MoM)", actual, estimate, 0, MetricCategory.INFLATION));
             } else if (title.contains("average hourly earnings") || (title.contains("wage") && title.contains("m/m"))) {
                 uniqueMetrics.put("Wage Growth (MoM)", new MarketMetric("Wage Growth (MoM)", actual, estimate, 0, MetricCategory.INFLATION));

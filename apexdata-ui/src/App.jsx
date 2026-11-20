@@ -404,7 +404,7 @@ function App() {
                                 <span style={{ ...styles.actual, color: getActualValueColor(metric.scoreDelta) }}>
                                   Act: {Number(metric.actualValue).toFixed(2)}
                                 </span>
-                                {metric.forecastValue !== 0 && (
+                                {(metric.forecastValue !== 0 || ['ECONOMIC_GROWTH', 'JOB_MARKET', 'INFLATION'].includes(metric.category)) && (
                                   <span style={styles.estimate}>
                                     Est: {Number(metric.forecastValue).toFixed(2)}
                                   </span>
