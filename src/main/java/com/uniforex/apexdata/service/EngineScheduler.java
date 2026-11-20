@@ -73,8 +73,8 @@ public class EngineScheduler {
         }
     }
 
-    // Runs once every day at 9:30 PM SAST, catching all US morning data + FOMC
-    @Scheduled(cron = "0 30 21 * * ?", zone = "Africa/Johannesburg")
+    // Runs once every day(MON-FRI) at 9:30 PM SAST , catching all US morning data + FOMC
+    @Scheduled(cron = "0 30 21 ? * MON-FRI", zone = "Africa/Johannesburg")
     public void executeCalendarCycle() {
         System.out.println("\n[SYSTEM] Executing Daily Calendar Poll...");
         try {
