@@ -41,8 +41,8 @@ public class EconomicCalendarService {
 
         // Generate a rolling 14-day window dynamically so the data never goes stale
         LocalDate today = LocalDate.now();
-        String fromDate = today.minusDays(7).format(DateTimeFormatter.ISO_LOCAL_DATE);
-        String toDate = today.plusDays(7).format(DateTimeFormatter.ISO_LOCAL_DATE);
+        String fromDate = today.minusDays(5).format(DateTimeFormatter.ISO_LOCAL_DATE);
+        String toDate = today.plusDays(1).format(DateTimeFormatter.ISO_LOCAL_DATE);
 
         // The precise JSON payload required by the Investing.com actor
         String jsonInputBody = "{\n" +
