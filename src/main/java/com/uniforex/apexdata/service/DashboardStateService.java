@@ -78,7 +78,8 @@ public class DashboardStateService {
                             usd.actualValue(),
                             usd.forecastValue(),
                             usd.scoreDelta() * -1, // Flip score for Gold
-                            usd.category()
+                            usd.category(),
+                            usd.lastUpdated()
                     ));
                 }
             }
@@ -154,7 +155,8 @@ public class DashboardStateService {
                             usd.actualValue(),
                             usd.forecastValue(),
                             usd.scoreDelta() * -1, // Flip score for Silver
-                            usd.category()
+                            usd.category(),
+                            usd.lastUpdated()
                     ));
                 }
             }
@@ -429,11 +431,11 @@ public class DashboardStateService {
             MetricCategory cat = usd.category();
             if (cat == MetricCategory.ECONOMIC_GROWTH || cat == MetricCategory.JOB_MARKET) {
                 baseMetrics.add(new MarketMetric(
-                        usd.name(), usd.actualValue(), usd.forecastValue(), usd.scoreDelta(), cat
+                        usd.name(), usd.actualValue(), usd.forecastValue(), usd.scoreDelta(), cat, usd.lastUpdated()
                 ));
             } else if (cat == MetricCategory.INFLATION || cat == MetricCategory.CAPITAL_FLOWS) {
                 baseMetrics.add(new MarketMetric(
-                        usd.name(), usd.actualValue(), usd.forecastValue(), usd.scoreDelta() * -1, cat
+                        usd.name(), usd.actualValue(), usd.forecastValue(), usd.scoreDelta() * -1, cat, usd.lastUpdated()
                 ));
             }
         }
