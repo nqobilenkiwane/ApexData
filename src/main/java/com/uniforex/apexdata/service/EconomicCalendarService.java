@@ -91,7 +91,7 @@ public class EconomicCalendarService {
 
             //Edited the metric names to cater to new metrics we measure.
 
-                // ADP Private Employment — ignore weekly
+                // ADP Private Employment — ignore weekly.
             if (title.contains("adp") && title.contains("employment") && !title.contains("weekly")) {
                 uniqueMetrics.put("ADP Private Employment", new MarketMetric("ADP Private Employment", actual, estimate, 0, MetricCategory.JOB_MARKET));
             } else if ((title.contains("nonfarm payrolls") || title.contains("non-farm employment change")) && !title.contains("private")) {
