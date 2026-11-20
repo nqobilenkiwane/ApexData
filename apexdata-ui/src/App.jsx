@@ -18,6 +18,7 @@ function App() {
   const [activePage, setActivePage] = useState('dashboard')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [activeAsset, setActiveAsset] = useState('DXY')
+  const [hoveredRow, setHoveredRow] = useState(null)
 
   useEffect(() => {
     const baseUrl = 'https://apexdata-production-dc24.up.railway.app';
@@ -83,6 +84,12 @@ function App() {
     return '#888888';
   };
 
+  const getScoreBg = (score) => {
+    if (score > 0) return 'rgba(0, 255, 136, 0.08)';
+    if (score < 0) return 'rgba(255, 51, 102, 0.08)';
+    return 'rgba(255, 255, 255, 0.03)';
+  };
+
   const getActualValueColor = (scoreDelta) => {
     if (scoreDelta > 0) return '#00ff88';
     if (scoreDelta < 0) return '#ff3366';
@@ -91,6 +98,11 @@ function App() {
 
   const formatCategory = (cat) => {
     return cat ? cat.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : '';
+  };
+
+  const formatSigned = (val) => {
+    const num = val ?? 0;
+    return num > 0 ? `+${num}` : `${num}`;
   };
 
   // Formats "2026-11-18T19:30:06" -> "18 Nov"
@@ -126,6 +138,25 @@ function App() {
     'CAPITAL_FLOWS',
     'TECHNICALS'
   ];
+
+  // Build & sort Asset Rankings (Most Bullish -> Most Bearish)
+  const rankedAssets = [
+    { id: 'DXY', symbol: 'DXY', name: 'US Dollar', data: summary },
+    { id: 'XAUUSD', symbol: 'XAUUSD', name: 'Gold', data: goldSummary },
+    { id: 'XAGUSD', symbol: 'XAGUSD', name: 'Silver', data: silverSummary },
+    { id: 'NAS100', symbol: 'NAS100', name: 'Nasdaq 100', data: nasdaqSummary },
+    { id: 'US30', symbol: 'US30', name: 'Dow Jones', data: dowSummary },
+    { id: 'SPX', symbol: 'SPX', name: 'S&P 500', data: sp500Summary },
+    { id: 'RUT', symbol: 'RUT', name: 'Russell 2000', data: russell2000Summary }
+  ]
+    .filter(asset => asset.data !== null)
+    .map(asset => ({
+      ...asset,
+      score: asset.data.totalScore ?? 0,
+      bias: asset.data.biasLabel || asset.data.overallBias || 'NEUTRAL',
+      cats: asset.data.categoryScores || {}
+    }))
+    .sort((a, b) => b.score - a.score);
 
   let activeSummaryData = summary;
   if (activeAsset === 'XAUUSD') activeSummaryData = goldSummary;
@@ -231,6 +262,19 @@ function App() {
           >
             <span style={styles.navIcon}>📊</span>
             {!sidebarCollapsed && <span>Macro Dashboard</span>}
+          </button>
+
+          <button
+            onClick={() => setActivePage('rankings')}
+            style={{
+              ...styles.navItem,
+              ...(activePage === 'rankings' ? styles.navItemActive : {}),
+              justifyContent: sidebarCollapsed ? 'center' : 'flex-start'
+            }}
+            title="Asset Rankings"
+          >
+            <span style={styles.navIcon}>🏆</span>
+            {!sidebarCollapsed && <span>Asset Rankings</span>}
           </button>
 
           <button
@@ -378,6 +422,93 @@ function App() {
               })}
             </div>
           </>
+        ) : activePage === 'rankings' ? (
+          /* ASSET RANKINGS PAGE */
+          <div style={styles.shiftsContainer}>
+            <div style={styles.cardHeader}>
+              <h2 style={styles.cardTitle}>ASSET RANKINGS</h2>
+              <span style={{ color: '#888888', fontSize: '0.85rem' }}>Click any asset to inspect full breakdown</span>
+            </div>
+
+            <div style={styles.tableWrapper}>
+              <table style={styles.table}>
+                <thead>
+                  <tr style={styles.tableHeaderRow}>
+                    <th style={styles.th}>Rank</th>
+                    <th style={styles.th}>Asset</th>
+                    <th style={styles.th}>Bias</th>
+                    <th style={styles.thCenter}>Growth</th>
+                    <th style={styles.thCenter}>Jobs</th>
+                    <th style={styles.thCenter}>Inflation</th>
+                    <th style={styles.thCenter}>COT</th>
+                    <th style={styles.thCenter}>Yields</th>
+                    <th style={styles.thCenter}>Techs</th>
+                    <th style={styles.thRight}>Composite</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rankedAssets.map((asset, index) => {
+                    const isHovered = hoveredRow === asset.id;
+                    return (
+                      <tr
+                        key={asset.id}
+                        onClick={() => {
+                          setActiveAsset(asset.id);
+                          setActivePage('dashboard');
+                        }}
+                        onMouseEnter={() => setHoveredRow(asset.id)}
+                        onMouseLeave={() => setHoveredRow(null)}
+                        style={{
+                          ...styles.tableRow,
+                          cursor: 'pointer',
+                          backgroundColor: isHovered ? '#18181D' : 'transparent',
+                          transition: 'background-color 0.15s ease'
+                        }}
+                      >
+                        <td style={styles.tdMuted}>#{index + 1}</td>
+                        <td style={styles.tdBold}>
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span>{asset.symbol}</span>
+                            <span style={{ color: '#71717A', fontSize: '0.78rem', fontWeight: '400' }}>{asset.name}</span>
+                          </div>
+                        </td>
+                        <td style={styles.td}>
+                          <span style={{
+                            ...styles.biasPill,
+                            color: getCompositeScoreColor(asset.score),
+                            borderColor: getCompositeScoreColor(asset.score)
+                          }}>
+                            {asset.bias}
+                          </span>
+                        </td>
+                        {CATEGORY_ORDER.map(cat => {
+                          const val = asset.cats[cat] ?? 0;
+                          return (
+                            <td key={cat} style={styles.tdCenter}>
+                              <span style={{
+                                ...styles.catPill,
+                                color: getMetricScoreColor(val),
+                                backgroundColor: getScoreBg(val)
+                              }}>
+                                {formatSigned(val)}
+                              </span>
+                            </td>
+                          );
+                        })}
+                        <td style={{
+                          ...styles.tdRightBold,
+                          fontSize: '1.15rem',
+                          color: getCompositeScoreColor(asset.score)
+                        }}>
+                          {formatSigned(asset.score)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
         ) : (
           /* RECENT SHIFTS PAGE */
           <div style={styles.shiftsContainer}>
@@ -472,12 +603,17 @@ const styles = {
   table: { width: '100%', borderCollapse: 'collapse', fontSize: '0.92rem' },
   tableHeaderRow: { borderBottom: '1px solid #222222', color: '#888888', textTransform: 'uppercase', fontSize: '0.78rem', letterSpacing: '0.8px' },
   th: { textAlign: 'left', padding: '12px 14px' },
+  thCenter: { textAlign: 'center', padding: '12px 14px' },
   thRight: { textAlign: 'right', padding: '12px 14px' },
   tableRow: { borderBottom: '1px solid #1A1A1A' },
+  td: { padding: '14px' },
   tdBold: { padding: '14px', color: '#FFFFFF', fontWeight: '600' },
   tdMuted: { padding: '14px', color: '#888888' },
+  tdCenter: { padding: '14px', textAlign: 'center' },
   tdRightBold: { padding: '14px', textAlign: 'right', color: '#00ff88', fontWeight: '600' },
-  tdRightMuted: { padding: '14px', textAlign: 'right', color: '#888888' }
+  tdRightMuted: { padding: '14px', textAlign: 'right', color: '#888888' },
+  biasPill: { display: 'inline-block', padding: '4px 10px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.5px', border: '1px solid', textTransform: 'uppercase' },
+  catPill: { display: 'inline-block', minWidth: '34px', padding: '4px 8px', borderRadius: '4px', fontWeight: '700', fontSize: '0.88rem' }
 };
 
 export default App;
